@@ -10,8 +10,12 @@ Code: TypeAlias = str
 Timestamp = NewType("Timestamp", int)
 
 
+_last_id = 0
 def make_unique_id() -> BlockId:
-    return BlockId(str(uuid4()))
+    global _last_id
+    _last_id += 1
+    return BlockId(f"id{_last_id}")
+    # return BlockId(str(uuid4()))
 
 
 _counter = 0
@@ -100,7 +104,7 @@ class AddBlock(Update):
             if state.is_hidden(parent_id):
                 state.unhide(parent_id)
             state.blocks[parent_id].outputs.add(self._block.id)
-        state.blocks[self._block.id] = self._block
+        state.blocks[self._block.id] = deepcopy(self._block)
 
 
 class DeleteBlock(Update):

@@ -1,6 +1,6 @@
 import pytest
 
-from pipeline.pipeline import *
+from pipeline import *
 
 
 class Applier:

@@ -85,3 +85,8 @@ pipeline: !GenericPipeline
     - !JupyterStage
         name: draw_graphs
         notebook_pipeline: experiments/simple/draw_graphs.draw_graphs_pipeline
+
+    - !BasicStage
+      name: smth
+      script:
+        - echo "Notebook results"

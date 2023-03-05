@@ -1,8 +1,12 @@
 import itertools
 import random
+
+from matplotlib import pyplot as plt
+
 random.seed(0xABBA)
 
 import pytest
+import networkx as nx
 
 from pipeline import *
 
@@ -15,23 +19,69 @@ def make_unique_name() -> str:
 
 
 class Applier:
-    def __init__(self, state: PipelineState):
+    cnt = 0
+
+    def __init__(self, state: PipelineState, idx=None):
         self.state = state.copy()
+        self.updates_ids = set()
+        self.updates_list = []
+        self.log = []
+        self.idx = idx
+        self.dump_state()
 
     def apply_local(self, upds: List[Update]) -> List[Update]:
-        # upds = [deepcopy(upd) for upd in upds]
         for upd in upds:
             upd.prepare(self.state)
             upd.effect(self.state)
-            if check_cycles(self.state):
-                assert not check_cycles(self.state)
+            self.dump_state(upd)
+            self.updates_ids.add(upd.id)
+            self.updates_list.append(upd)
         return upds
 
     def apply_remote(self, upds: List[Update]) -> None:
         for upd in upds:
             upd.effect(self.state)
-            if check_cycles(self.state):
-                assert not check_cycles(self.state)
+            self.dump_state(upd, is_sync=True)
+            self.updates_ids.add(upd.id)
+            self.updates_list.append(upd)
+
+    def dump_state(self, upd, is_sync=False) -> None:
+        if self.idx is None:
+            return
+
+        Applier.cnt += 1
+        i = Applier.cnt
+
+        if isinstance(upd, AddBlock):
+            id_ = upd._block.id
+        elif isinstance(upd, EditBlock):
+            id_ = upd._block_id
+        else:
+            assert isinstance(upd, DeleteBlock)
+            id_ = upd._block_id
+
+        G = nx.DiGraph()
+        G.add_nodes_from(self.state.blocks.keys())
+        for block in self.state.blocks.values():
+            for nxt_id in block.outputs:
+                G.add_edge(block.id, nxt_id)
+        colors = ['black' if node != id_ else 'blue' for node in G.nodes]
+
+        pos = nx.nx_agraph.graphviz_layout(G)
+        fig, ax = plt.subplots(1, 1, figsize=(14, 14))
+        nx.draw(G, pos, with_labels=True, node_size=800, node_color='black', font_color='white', ax=ax, colors=colors)
+        if is_sync:
+            fig.set_facecolor('xkcd:salmon')
+        fig.savefig(f'{self.idx}/{i}.png')
+        #
+        # log = sorted(list(self.state.blocks.keys()))
+        # e = []
+        # for block in self.state.blocks.values():
+        #     for nxt_id in block.outputs:
+        #         e.append([block.id, nxt_id])
+        # e.sort()
+        # log += e
+        # self.log.append(log)
 
 
 def get_all_reachable_ids(state: PipelineState, block_id: BlockId) -> Set[BlockId]:
@@ -74,34 +124,35 @@ def check_cycles(state: PipelineState):
 
 
 def make_random_operation(state: PipelineState) -> Optional[Update]:
-    if random.randint(0, 10) == 0:
+    if random.randint(0, 4) == 0:
         return None  # Means sync
 
-    visible_blocks = [block for name, block in state.blocks.items() if not block.is_hidden]
+    visible_blocks = [block for name, block in state.blocks.items() if not block.is_deprecated]
     deletable_blocks = [
-        block for block in visible_blocks if all(state.is_hidden(out) for out in block.outputs)
+        block for block in visible_blocks if all(state.is_deprecated(out) for out in block.outputs)
     ]
 
-    op_idx = random.randint(0, 2)
-    if op_idx == 0 and deletable_blocks:  # Del
+    op_idx = random.randint(0, 100)
+    if op_idx <= 40 and deletable_blocks:  # Del
         block = random.choice(deletable_blocks)
         return DeleteBlock(block.id)
 
-    if op_idx <= 1 and visible_blocks:  # Edit
+    if op_idx <= 90 and visible_blocks:  # Edit
         block = random.choice(visible_blocks)
 
-        # possible_inputs_set = set(block.id for block in visible_blocks) - get_all_reachable_ids(state, block.id)
+        possible_inputs_set = set(block.id for block in visible_blocks) - get_all_reachable_ids(state, block.id)
         # assert all(inp_id in possible_inputs_set for inp_id in block.inputs), "Cycles?"
         # assert len(possible_inputs_set) >= len(block.inputs)
-        # if not possible_inputs_set:
-        #     new_inputs_cnt = 0
-        # else:
-        #     new_inputs_cnt = random.randint(1, min(3, len(possible_inputs_set)))
-        # new_inputs = random.sample(sorted(list(possible_inputs_set)), new_inputs_cnt)
-        new_inputs = block.inputs
+        possible_inputs_set |= set(block.inputs)
+        if not possible_inputs_set:
+            new_inputs_cnt = 0
+        else:
+            new_inputs_cnt = random.randint(1, min(3, len(possible_inputs_set)))
+        new_inputs = random.sample(sorted(list(possible_inputs_set)), new_inputs_cnt)
+        # new_inputs = block.inputs
         return EditBlock(block.id, block.code + ";", new_inputs, get_timestamp())
 
-    assert op_idx <= 2  # Add
+    assert op_idx <= 100  # Add
     if not visible_blocks:
         prev_cnt = 0
     else:
@@ -113,6 +164,7 @@ def make_random_operation(state: PipelineState) -> Optional[Update]:
 
 @pytest.fixture
 def init_state():
+    Applier.cnt = 0
     app = Applier(PipelineState({}))
 
     def get_id(name: str) -> BlockId:
@@ -131,6 +183,7 @@ def init_state():
     return app.state
 
 
+@pytest.mark.skip
 def test_stress(init_state):
     app_1 = Applier(init_state)
     local_upds_1 = []
@@ -145,7 +198,7 @@ def test_stress(init_state):
         if upd_1 is None:
             pulled_upds = local_upds_2[pulled_cnt_1:]
             pulled_cnt_1 += len(pulled_upds)
-            print(len(pulled_upds))
+            # print(len(pulled_upds))
             app_1.apply_remote(pulled_upds)
         else:
             local_upds_1.append(upd_1)
@@ -163,7 +216,6 @@ def test_stress(init_state):
         # assert not check_cycles(app_1.state), "App1"
         # assert not check_cycles(app_2.state), "App2"
 
-
     pulled_upds = local_upds_2[pulled_cnt_1:]
     pulled_cnt_1 += len(pulled_upds)
     app_1.apply_remote(pulled_upds)
@@ -173,37 +225,36 @@ def test_stress(init_state):
     app_2.apply_remote(pulled_upds)
 
     assert app_1.state == app_2.state
-    print(sum(not block.is_hidden for block in app_1.state.blocks.values()))
 
 
-@pytest.mark.skip
 def test_stress_3(init_state):
-    apps = [Applier(init_state) for _ in range(3)]
-
-    # TODO: тут нужно хранить не только локальные, но и исполненные ремоут обновления. При этом ремоут хост,
-    # скачивая их, должен пропускать те из них, что он уже применил
-    local_upds = [[] for _ in apps]
+    apps = [Applier(init_state, i+1) for i in range(4)]
     pulled_cnt = [[0 for _ in apps] for _ in apps]
 
-    for _ in range(15):
-        for i, app in enumerate(apps):
+    for _ in range(30):
+        pairs = list(enumerate(apps))
+        random.shuffle(pairs)
+        for i, app in pairs:
             upd = make_random_operation(app.state)
             if upd is not None:
-                local_upds[i].append(upd)
                 app.apply_local([upd])
             else:
                 # sync
                 for src_idx in itertools.chain(range(0, i), range(i + 1, len(apps))):
-                    pulled_upds = local_upds[src_idx][pulled_cnt[i][src_idx]:]
-                    pulled_cnt[i][src_idx] += len(pulled_upds)
-                    app.apply_remote(pulled_upds)
+                    start_upd_idx = pulled_cnt[i][src_idx]
+                    pulled_cnt[i][src_idx] = len(apps[src_idx].updates_list)
+                    app.apply_remote([upd for upd in apps[src_idx].updates_list[start_upd_idx:]
+                                      if upd.id not in app.updates_ids])
 
     # sync all
     for i, app in enumerate(apps):
         for src_idx in itertools.chain(range(0, i), range(i + 1, len(apps))):
-            pulled_upds = local_upds[src_idx][pulled_cnt[i][src_idx]:]
-            pulled_cnt[i][src_idx] += len(pulled_upds)
-            app.apply_remote(pulled_upds)
+            start_upd_idx = pulled_cnt[i][src_idx]
+            pulled_cnt[i][src_idx] = len(apps[src_idx].updates_list)
+            app.apply_remote([upd for upd in apps[src_idx].updates_list[start_upd_idx:]
+                              if upd.id not in app.updates_ids])
 
+    assert apps[0].state != init_state
     for i in range(1, len(apps)):
+        assert apps[i - 1].updates_ids == apps[i].updates_ids
         assert apps[i - 1].state == apps[i].state

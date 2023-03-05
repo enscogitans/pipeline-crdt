@@ -7,6 +7,8 @@ name = "pypi"
 pytest = "*"
 
 [packages]
+matplotlib = "*"
+networkx = "*"
 
 [requires]
 python_version = "3.10"

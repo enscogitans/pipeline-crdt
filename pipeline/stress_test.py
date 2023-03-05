@@ -1,12 +1,8 @@
 import itertools
 import random
-
-from matplotlib import pyplot as plt
-
 random.seed(0xABBA)
 
 import pytest
-import networkx as nx
 
 from pipeline import *
 
@@ -27,13 +23,11 @@ class Applier:
         self.updates_list = []
         self.log = []
         self.idx = idx
-        self.dump_state()
 
     def apply_local(self, upds: List[Update]) -> List[Update]:
         for upd in upds:
             upd.prepare(self.state)
             upd.effect(self.state)
-            self.dump_state(upd)
             self.updates_ids.add(upd.id)
             self.updates_list.append(upd)
         return upds
@@ -41,47 +35,8 @@ class Applier:
     def apply_remote(self, upds: List[Update]) -> None:
         for upd in upds:
             upd.effect(self.state)
-            self.dump_state(upd, is_sync=True)
             self.updates_ids.add(upd.id)
             self.updates_list.append(upd)
-
-    def dump_state(self, upd, is_sync=False) -> None:
-        if self.idx is None:
-            return
-
-        Applier.cnt += 1
-        i = Applier.cnt
-
-        if isinstance(upd, AddBlock):
-            id_ = upd._block.id
-        elif isinstance(upd, EditBlock):
-            id_ = upd._block_id
-        else:
-            assert isinstance(upd, DeleteBlock)
-            id_ = upd._block_id
-
-        G = nx.DiGraph()
-        G.add_nodes_from(self.state.blocks.keys())
-        for block in self.state.blocks.values():
-            for nxt_id in block.outputs:
-                G.add_edge(block.id, nxt_id)
-        colors = ['black' if node != id_ else 'blue' for node in G.nodes]
-
-        pos = nx.nx_agraph.graphviz_layout(G)
-        fig, ax = plt.subplots(1, 1, figsize=(14, 14))
-        nx.draw(G, pos, with_labels=True, node_size=800, node_color='black', font_color='white', ax=ax, colors=colors)
-        if is_sync:
-            fig.set_facecolor('xkcd:salmon')
-        fig.savefig(f'{self.idx}/{i}.png')
-        #
-        # log = sorted(list(self.state.blocks.keys()))
-        # e = []
-        # for block in self.state.blocks.values():
-        #     for nxt_id in block.outputs:
-        #         e.append([block.id, nxt_id])
-        # e.sort()
-        # log += e
-        # self.log.append(log)
 
 
 def get_all_reachable_ids(state: PipelineState, block_id: BlockId) -> Set[BlockId]:
@@ -183,7 +138,7 @@ def init_state():
     return app.state
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_stress(init_state):
     app_1 = Applier(init_state)
     local_upds_1 = []

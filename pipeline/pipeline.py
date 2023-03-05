@@ -33,7 +33,13 @@ class Block:
     inputs: List[BlockId]
     outputs: Set[BlockId]
     last_edit_ts: Timestamp
-    is_hidden: bool = False
+    is_deprecated: bool = False
+    # is_hidden: bool = False
+    is_all_children_hidden: bool = True
+
+    @property
+    def is_hidden(self) -> bool:
+        return self.is_deprecated and self.is_all_children_hidden
 
 
 @dataclass
@@ -53,21 +59,39 @@ class PipelineState:
     def has_block(self, block_id: BlockId) -> bool:
         return block_id in self.blocks
 
+    def is_deprecated(self, block_id: BlockId) -> bool:
+        return self.blocks[block_id].is_deprecated
+
+    def update_is_all_children_hidden(self, block_id: BlockId) -> None:
+        block = self.blocks[block_id]
+        prev_val = block.is_all_children_hidden
+        block.is_all_children_hidden = all(self.blocks[out_id].is_hidden for out_id in block.outputs)
+        if block.is_all_children_hidden == prev_val:
+            return
+        for parent_id in block.inputs:
+            self.update_is_all_children_hidden(parent_id)
+
     def is_hidden(self, block_id: BlockId) -> bool:
         return self.blocks[block_id].is_hidden
 
-    def hide(self, block_id: BlockId) -> None:
-        assert all(self.is_hidden(child_id) for child_id in self.blocks[block_id].outputs)
-        self.blocks[block_id].is_hidden = True
+    # def hide(self, block_id: BlockId) -> None:
+    #     assert all(self.is_hidden(child_id) for child_id in self.blocks[block_id].outputs)
+    #     self.blocks[block_id].is_hidden = True
 
-    def unhide(self, block_id: BlockId) -> None:
-        self.blocks[block_id].is_hidden = False
-        for parent_id in self.blocks[block_id].inputs:
-            if self.is_hidden(parent_id):
-                self.unhide(parent_id)
+    def deprecate(self, block_id: BlockId) -> None:
+        self.blocks[block_id].is_deprecated = True
+
+    # def unhide(self, block_id: BlockId) -> None:
+    #     self.blocks[block_id].is_hidden = False
+    #     for parent_id in self.blocks[block_id].inputs:
+    #         if self.is_hidden(parent_id):
+    #             self.unhide(parent_id)
 
 
 class Update(abc.ABC):
+    def __init__(self):
+        self.id = uuid4()
+
     @abc.abstractmethod
     def prepare(self, state: PipelineState) -> None:
         """Executes only on local machine, before pushing operation to the server. Must not change state"""
@@ -88,7 +112,7 @@ class AddBlock(Update):
 
     def prepare(self, state: PipelineState) -> None:
         assert all(state.has_block(block_id) for block_id in self._inputs)
-        assert all(not state.is_hidden(block_id) for block_id in self._inputs)
+        assert all(not state.is_deprecated(block_id) for block_id in self._inputs)
         self._block = Block(
             name=self._name,
             id=make_unique_id(),
@@ -100,11 +124,10 @@ class AddBlock(Update):
 
     def effect(self, state: PipelineState) -> None:
         assert self._block is not None
-        for parent_id in self._block.inputs:
-            if state.is_hidden(parent_id):
-                state.unhide(parent_id)
-            state.blocks[parent_id].outputs.add(self._block.id)
         state.blocks[self._block.id] = deepcopy(self._block)
+        for parent_id in self._block.inputs:
+            state.blocks[parent_id].outputs.add(self._block.id)
+            state.update_is_all_children_hidden(parent_id)
 
 
 class DeleteBlock(Update):
@@ -114,15 +137,15 @@ class DeleteBlock(Update):
 
     def prepare(self, state: PipelineState) -> None:
         assert state.has_block(self._block_id)
-        assert not state.is_hidden(self._block_id)
-        assert all(state.is_hidden(child_id) for child_id in state.blocks[self._block_id].outputs)
+        assert not state.is_deprecated(self._block_id)
+        assert all(state.is_deprecated(child_id) for child_id in state.blocks[self._block_id].outputs)
 
     def effect(self, state: PipelineState) -> None:
-        if state.is_hidden(self._block_id):
+        if state.is_deprecated(self._block_id):
             return
-        if any(not state.is_hidden(child_id) for child_id in state.blocks[self._block_id].outputs):
-            return
-        state.hide(self._block_id)
+        state.deprecate(self._block_id)
+        for parent_id in state.blocks[self._block_id].inputs:
+            state.update_is_all_children_hidden(parent_id)
 
 
 class EditBlock(Update):
@@ -136,7 +159,7 @@ class EditBlock(Update):
 
     def prepare(self, state: PipelineState) -> None:
         # TODO: check no loops will occur
-        assert not state.is_hidden(self._block_id)
+        assert not state.is_deprecated(self._block_id)
 
     def effect(self, state: PipelineState) -> None:
         block = state.blocks[self._block_id]
@@ -146,8 +169,8 @@ class EditBlock(Update):
         block.code = self._new_code
         for old_parent_id in block.inputs:
             state.blocks[old_parent_id].outputs.remove(self._block_id)
+            state.update_is_all_children_hidden(old_parent_id)
         for new_parent_id in self._new_inputs:
-            if not block.is_hidden and state.is_hidden(new_parent_id):
-                state.unhide(new_parent_id)
             state.blocks[new_parent_id].outputs.add(self._block_id)
+            state.update_is_all_children_hidden(new_parent_id)
         state.blocks[self._block_id].inputs = self._new_inputs

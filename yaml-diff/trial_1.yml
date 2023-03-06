@@ -85,9 +85,3 @@ pipeline: !GenericPipeline
           lambda row: row['actions']
         all_action_rewards: !PythonExpression >
           lambda row: row['all_reward']
-
-    - !JupyterStage
-        name: draw_graphs
-        depends_on:
-          - metrics
-        notebook_pipeline: experiments/simple/draw_graphs.draw_graphs_pipeline

@@ -1,0 +1,73 @@
+pipeline:
+  runs:
+  - init: 'round_count = int(round_count)
+
+      '
+    iteration_results:
+      actions: algorithm.actions
+      all_reward: noise_bandit.all_reward
+      parametrization: noise_bandit.parametrization
+      round: i
+    name: simple-trial
+    params:
+      M: 10
+      algorithm:
+        M: 10
+        init: 'reward = None
+
+          params = init_params(M)
+
+          '
+        init_params: src/algorithms/multiarmed_bandits_policies/thompson_sampling.init_parameters
+        l: 1
+        name: thompson_sampling
+        predict: src/algorithms/multiarmed_bandits_policies/thompson_sampling.predict
+        run: 'actions = predict(params, l)
+
+          params = update(params, actions, reward)
+
+          '
+        tag: Atom
+        update: src/algorithms/multiarmed_bandits_policies/thompson_sampling.update
+      l: 1
+      noise_bandit:
+        M: 10
+        get_all_actions_reward: src/bandits/drift/noise_bandit.get_all_actions_reward
+        init: 'parametrization = init_bandit(M)
+
+          '
+        init_bandit: src/bandits/drift/noise_bandit.init_bandit
+        l: 1
+        name: noise_bandit
+        run: 'all_reward = get_all_actions_reward(parametrization, M, w)
+
+          reward = np.zeros_like(all_reward)
+
+          reward[actions] = all_reward[actions]
+
+          '
+        tag: Atom
+      round_count: ${env.ROUNDCOUNT}
+      trial: simple-trial
+      w: 0.01
+    run: "algorithm()\nfor i in range(round_count):\n    if i > 1:\n        algorithm(reward=noise_bandit.reward)\n\
+      \    noise_bandit(actions=algorithm.actions, w=params.w)\n\n    observe(iteration_results)\n"
+    tag: Atom
+  - name: mkdir
+    script:
+    - mkdir -p ${env.TARGETFOLDER}/metrics ${env.TARGETFOLDER}/charts
+    tag: BasicStage
+  - columns_mapping:
+      all_action_rewards: 'lambda row: row[''all_reward'']
+
+        '
+      selected_action_indexes: 'lambda row: row[''actions'']
+
+        '
+    data_path: ${env.TARGETFOLDER}/data-*.parquet
+    result_path: ${env.TARGETFOLDER}/metrics
+    tag: CumulativeOracleActionPercentage
+  - name: draw_graphs
+    notebook_pipeline: experiments/simple/draw_graphs.draw_graphs_pipeline
+    tag: JupyterStage
+  tag: GenericPipeline

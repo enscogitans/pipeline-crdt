@@ -88,6 +88,13 @@ pipeline: !GenericPipeline
 
     - !JupyterStage
         name: draw_graphs
-        depends_on:
+        depends_on: 
           - metrics
         notebook_pipeline: experiments/simple/draw_graphs.draw_graphs_pipeline
+
+    - !BasicStage
+      name: graph_usage
+      depends_on:
+        - draw_graphs
+      script:
+        - echo "Use notebook results"

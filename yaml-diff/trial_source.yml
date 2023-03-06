@@ -74,10 +74,6 @@ pipeline: !GenericPipeline
         - mkdir -p ${env.TARGETFOLDER}/metrics ${env.TARGETFOLDER}/charts
 
     - !CumulativeOracleActionPercentage
-      name: metrics
-      depends_on:
-        - *trial_name
-        - mkdir
       data_path: "${env.TARGETFOLDER}/data-*.parquet"
       result_path: "${env.TARGETFOLDER}/metrics"
       columns_mapping:
@@ -88,6 +84,4 @@ pipeline: !GenericPipeline
 
     - !JupyterStage
         name: draw_graphs
-        depends_on:
-          - metrics
         notebook_pipeline: experiments/simple/draw_graphs.draw_graphs_pipeline

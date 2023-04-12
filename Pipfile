@@ -9,7 +9,8 @@ pytest = "*"
 [packages]
 matplotlib = "*"
 networkx = "*"
-pyyaml = "*"
+ruamel-yaml = "*"
+deepdiff = "*"
 
 [requires]
 python_version = "3.10"

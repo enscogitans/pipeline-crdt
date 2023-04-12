@@ -1,0 +1,5 @@
+A: &A
+  l: 1
+B:
+  <<: *A
+  log_dir: "foo/bar"

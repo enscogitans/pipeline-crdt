@@ -1,0 +1,56 @@
+import typing
+
+import yaml_diff_v3.crdt_graph.nodes as crdt
+import yaml_diff_v3.yaml_graph.nodes as yaml
+from yaml_diff_v3.utils import make_unique_id
+
+
+def _make_new_node_kwargs(node_id: str, yaml_tag: str,
+                          yaml_path: yaml.NodePath, ts: crdt.Timestamp) -> dict[str, typing.Any]:
+    # See crdt.Node constructor
+    return dict(
+        id=crdt.NodeId(node_id),
+        yaml_tag=yaml_tag,
+        yaml_path=yaml_path,
+        last_edit_ts=ts,
+        is_deprecated=False,
+        # is_all_parents_hidden=False,
+    )
+
+
+def _make_crdt_scalar_node(yaml_node: yaml.ScalarNode, node_id: str, ts: crdt.Timestamp) -> crdt.ScalarNode:
+    return crdt.ScalarNode(
+        value=yaml_node.value,
+        **_make_new_node_kwargs(node_id, yaml_node.tag, yaml_node.path, ts),
+    )
+
+
+def _make_crdt_mapping_node(node_id: str, yaml_node: yaml.MappingNode, ts: crdt.Timestamp) -> crdt.MappingNode:
+    return crdt.MappingNode(
+        items=[make_new_crdt_mapping_item_from_yaml(yaml_item, ts) for yaml_item in yaml_node.items.values()],
+        **_make_new_node_kwargs(node_id, yaml_node.tag, yaml_node.path, ts),
+    )
+
+
+def _make_crdt_node(yaml_node: yaml.Node, node_id: str, ts: crdt.Timestamp) -> crdt.Node:
+    if isinstance(yaml_node, yaml.ScalarNode):
+        return _make_crdt_scalar_node(yaml_node, node_id, ts)
+    if isinstance(yaml_node, yaml.MappingNode):
+        return _make_crdt_mapping_node(node_id, yaml_node, ts)
+    if isinstance(yaml_node, yaml.SequenceNode):
+        pass
+    raise NotImplementedError(f"Unexpected yaml node {yaml_node}")
+
+
+def make_new_crdt_mapping_item_from_yaml(yaml_item: yaml.MappingNode.Item, ts: crdt.Timestamp) -> crdt.MappingNode.Item:
+    if not isinstance(yaml_item.key, yaml.ScalarNode):
+        raise TypeError(f"Locally added key can't be composite")
+    return crdt.MappingNode.Item(
+        key=_make_crdt_scalar_node(yaml_item.key, make_unique_id(), ts),
+        value=_make_crdt_node(yaml_item.value, make_unique_id(), ts),
+    )
+
+
+def make_new_crdt_node_from_yaml(yaml_node: yaml.Node, ts: crdt.Timestamp) -> crdt.Node:
+    node_id = make_unique_id()
+    return _make_crdt_node(yaml_node, node_id, ts)

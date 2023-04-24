@@ -1,6 +1,6 @@
 from deepdiff import DeepDiff
 
-from yaml_diff_v3.yaml_graph.nodes import Node, ScalarNode, MappingNode
+from yaml_diff_v3.yaml_graph.nodes import Node, ScalarNode, MappingNode, ReferenceNode
 from yaml_diff_v3.yaml_graph.updates import Update, EditScalarNode, AddMapItem, DeleteMapItem
 
 
@@ -36,7 +36,8 @@ def _build_dictionary_item_removed(deltas) -> list[Update]:
         assert isinstance(deleted_item, MappingNode.Item)
         key_path = deleted_item.key.path
         item_path = key_path[:-1]
-        updates.append(DeleteMapItem(item_path))
+        value_path = item_path + (1,)
+        updates.append(DeleteMapItem(value_path))  # all operations with item are performed via its value
     return updates
 
 
@@ -45,6 +46,9 @@ def build_updates(old_graph: Node, new_graph: Node) -> list[Update]:
         old_graph,
         new_graph,
         verbose_level=2,  # This is to see dict key's new value
+        # If any of compared nodes (t1 or t2) is of this type, it is skipped.
+        # TODO: what if we want to change node type from Scalar to Reference?
+        exclude_types=[ReferenceNode],
     )
 
     updates: list[Update] = []

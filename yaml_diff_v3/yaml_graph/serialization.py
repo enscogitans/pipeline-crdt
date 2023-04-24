@@ -16,7 +16,6 @@ def _get_default_yaml_kwargs():
         start_mark=_make_dummy_mark(),  # Can't be None
         end_mark=_make_dummy_mark(),
         comment=None,
-        anchor=None,
     )
 
 
@@ -34,6 +33,7 @@ def _deserialize_scalar(serialized: yaml.ScalarNode, path: NodePath) -> nodes.Sc
         path=path,
         tag=serialized.tag,
         value=serialized.value,
+        anchor=serialized.anchor,
     )
 
 
@@ -42,75 +42,105 @@ def _serialize_scalar(node: nodes.ScalarNode) -> yaml.ScalarNode:
         tag=node.tag,
         value=node.value,
         style=None,  # TODO: fill
+        anchor=node.anchor,
         **_get_default_yaml_kwargs(),
     )
 
 
-def _deserialize_mapping(serialized: yaml.MappingNode, path: NodePath) -> nodes.MappingNode:
+def _deserialize_mapping(serialized: yaml.MappingNode, path: NodePath,
+                         deserialized_nodes: dict[yaml.Node, nodes.Node]) -> nodes.MappingNode:
     assert serialized.merge is None, serialized  # TODO: find out when it is not None
 
     items = OrderedDict()  # type: OrderedDict[str, nodes.MappingNode.Item]
     for key, value in serialized.value:
         path_key: NodePathKey = _yaml_node_as_path_key(key)
         item_path = path + (path_key,)
-        key_node = _deserialize_node(key, item_path + (0,))
-        value_node = _deserialize_node(value, item_path + (1,))
+        key_node = _deserialize_node(key, item_path + (0,), deserialized_nodes)
+        value_node = _deserialize_node(value, item_path + (1,), deserialized_nodes)
         items[path_key] = nodes.MappingNode.Item(key=key_node, value=value_node, path_key=path_key)
 
-    return nodes.MappingNode(path=path, tag=serialized.tag, items=items)
+    return nodes.MappingNode(path=path, tag=serialized.tag, items=items, anchor=serialized.anchor)
 
 
-def _serialize_mapping(node: nodes.MappingNode) -> yaml.MappingNode:
+def _serialize_mapping(node: nodes.MappingNode, serialized_nodes: dict[nodes.Node, yaml.Node]) -> yaml.MappingNode:
     serialized = yaml.MappingNode(
         tag=node.tag,
-        value=[(_serialize_node(item.key), _serialize_node(item.value)) for item in node.items.values()],
+        value=[(_serialize_node(item.key, serialized_nodes),
+                _serialize_node(item.value, serialized_nodes)) for item in node.items.values()],
         flow_style=None,  # TODO: fill
+        anchor=node.anchor,
         **_get_default_yaml_kwargs(),
     )
     serialized.merge = None  # TODO: find out when it is not None
     return serialized
 
 
-def _deserialize_sequence(serialized: yaml.SequenceNode, path: NodePath) -> nodes.SequenceNode:
+def _deserialize_sequence(serialized: yaml.SequenceNode, path: NodePath,
+                          deserialized_nodes: dict[yaml.Node, nodes.Node]) -> nodes.SequenceNode:
     return nodes.SequenceNode(
         path=path,
         tag=serialized.tag,
-        values=tuple(_deserialize_node(value, path + (i,)) for i, value in enumerate(serialized.value)),
+        values=tuple(_deserialize_node(value, path + (i,), deserialized_nodes)
+                     for i, value in enumerate(serialized.value)),
+        anchor=serialized.anchor,
     )
 
 
-def _serialize_sequence(node: nodes.SequenceNode) -> yaml.SequenceNode:
+def _serialize_sequence(node: nodes.SequenceNode, serialized_nodes: dict[nodes.Node, yaml.Node]) -> yaml.SequenceNode:
     return yaml.SequenceNode(
         tag=node.tag,
-        value=[_serialize_node(value) for value in node.values],
+        value=[_serialize_node(value, serialized_nodes) for value in node.values],
         flow_style=None,  # TODO: fill
+        anchor=node.anchor,
         **_get_default_yaml_kwargs(),
     )
 
 
-def _deserialize_node(serialized: yaml.Node, path: NodePath) -> nodes.Node:
+def _deserialize_node(serialized: yaml.Node, path: NodePath,
+                      deserialized_nodes: dict[yaml.Node, nodes.Node]) -> nodes.Node:
+    if serialized in deserialized_nodes:
+        assert serialized.anchor is not None
+        assert serialized.anchor == deserialized_nodes[serialized].anchor
+        return nodes.ReferenceNode(path=path, referred_node=deserialized_nodes[serialized])
+
+    node: nodes.Node
     if isinstance(serialized, yaml.ScalarNode):
-        return _deserialize_scalar(serialized, path)
-    if isinstance(serialized, yaml.MappingNode):
-        return _deserialize_mapping(serialized, path)
-    if isinstance(serialized, yaml.SequenceNode):
-        return _deserialize_sequence(serialized, path)
-    raise Exception(f"Unexpected yaml node {serialized}")
+        node = _deserialize_scalar(serialized, path)
+    elif isinstance(serialized, yaml.MappingNode):
+        node = _deserialize_mapping(serialized, path, deserialized_nodes)
+    elif isinstance(serialized, yaml.SequenceNode):
+        node = _deserialize_sequence(serialized, path, deserialized_nodes)
+    else:
+        raise TypeError(f"Unexpected yaml node {serialized}")
+
+    deserialized_nodes[serialized] = node
+    return node
 
 
-def _serialize_node(node: nodes.Node) -> yaml.Node:
+def _serialize_node(node: nodes.Node, serialized_nodes: dict[nodes.Node, yaml.Node]) -> yaml.Node:
+    if isinstance(node, nodes.ReferenceNode):
+        assert node.referred_node.anchor is not None
+        return serialized_nodes[node.referred_node]
+
+    serialized: yaml.Node
     if isinstance(node, nodes.ScalarNode):
-        return _serialize_scalar(node)
-    if isinstance(node, nodes.MappingNode):
-        return _serialize_mapping(node)
-    if isinstance(node, nodes.SequenceNode):
-        return _serialize_sequence(node)
-    raise Exception(f"Unexpected graph node {node}")
+        serialized = _serialize_scalar(node)
+    elif isinstance(node, nodes.MappingNode):
+        serialized = _serialize_mapping(node, serialized_nodes)
+    elif isinstance(node, nodes.SequenceNode):
+        serialized = _serialize_sequence(node, serialized_nodes)
+    else:
+        raise Exception(f"Unexpected graph node {node}")
+
+    serialized_nodes[node] = serialized
+    return serialized
 
 
 def deserialize(serialized: yaml.Node) -> nodes.Node:
-    return _deserialize_node(serialized, path=())
+    deserialized_nodes: dict[yaml.Node, nodes.Node] = {}
+    return _deserialize_node(serialized, path=(), deserialized_nodes=deserialized_nodes)
 
 
 def serialize(node: nodes.Node) -> yaml.Node:
-    return _serialize_node(node)
+    serialized_nodes: dict[nodes.Node, yaml.Node] = {}
+    return _serialize_node(node, serialized_nodes)

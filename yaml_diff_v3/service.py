@@ -24,3 +24,10 @@ class Service:
     def convert_to_yaml(self, graph: crdt_graph.Graph) -> str:
         yaml_node = converter.crdt_graph_to_yaml_node(graph)
         return utils.dumps_yaml_node(yaml_graph.serialize(yaml_node))
+
+    def merge_with_empty_graph(self, base_yaml_text: str, yaml_text_1: str, yaml_text_2: str) -> str:
+        graph = self.make_initial_crdt_graph(base_yaml_text, Timestamp(0))
+        updates_1 = self.build_local_updates(graph, base_yaml_text, yaml_text_1, SessionId("session_1"), Timestamp(1))
+        updates_2 = self.build_local_updates(graph, base_yaml_text, yaml_text_2, SessionId("session_2"), Timestamp(2))
+        self.apply_updates(graph, updates_1 + updates_2, applied_updates=set())
+        return self.convert_to_yaml(graph)

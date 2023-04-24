@@ -51,14 +51,14 @@ def test_dict_2():
 
     [(key_elem, item)] = root.items.items()
     assert key_elem == "A"
-    assert item.key == ScalarNode(path=("A", 0), tag=get_tag("str"), value="A")
+    assert item.key == ScalarNode(path=("A", 0), tag=get_tag("str"), value="A", anchor=None)
     assert isinstance(item.value, MappingNode)
     assert item.value.path == ("A", 1)
 
     [(inner_key_elem, inner_item)] = item.value.items.items()
     assert inner_key_elem == "a"
-    assert inner_item.key == ScalarNode(path=("A", 1, "a", 0), tag=get_tag("str"), value="a")
-    assert inner_item.value == ScalarNode(path=("A", 1, "a", 1), tag=get_tag("int"), value="1")
+    assert inner_item.key == ScalarNode(path=("A", 1, "a", 0), tag=get_tag("str"), value="a", anchor=None)
+    assert inner_item.value == ScalarNode(path=("A", 1, "a", 1), tag=get_tag("int"), value="1", anchor=None)
 
 
 def test_tag():
@@ -88,4 +88,20 @@ def test_comment():
         A:  # comment for A
           X: x
           Y: 1441    
+    """)
+
+
+def test_merge():
+    check("""
+        A: &a
+        - 1
+        - 2
+        B: *a
+    """)
+    check("""
+        A: &a
+          X: x
+          Y: y
+        B: *a
+        <<: *a
     """)

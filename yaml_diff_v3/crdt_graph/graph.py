@@ -8,8 +8,8 @@ class Graph:
     def __init__(self, root: Node):
         self.root = root
 
-    def get_path_to_id_mapping(self) -> dict[yaml_graph.NodePath, NodeId]:  # TODO: eval yaml_path in runtime
-        return {node.yaml_path: node.id for node in self._iter_nodes()}
+    def get_path_to_node_mapping(self) -> dict[yaml_graph.NodePath, Node]:  # TODO: eval yaml_path in runtime
+        return {node.yaml_path: node for node in self._iter_nodes()}
 
     def get_node(self, node_id: NodeId) -> Node:
         [node] = [node for node in self._iter_nodes() if node.id == node_id]

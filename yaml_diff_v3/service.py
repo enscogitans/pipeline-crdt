@@ -17,9 +17,10 @@ class Service:
         return converter.make_crdt_updates_from_yaml_updates(yaml_updates, session_id, ts, old_graph)
 
     def apply_updates(self, graph: crdt_graph.Graph, updates: list[crdt_graph.Update],
-                      applied_updates: set[crdt_graph.UpdateId]) -> None:
+                      applied_updates: set[crdt_graph.UpdateId]) -> crdt_graph.Graph:
         applier = crdt_graph.UpdatesApplier(applied_updates)
         applier.apply_updates(graph, updates)
+        return graph
 
     def convert_to_yaml(self, graph: crdt_graph.Graph) -> str:
         yaml_node = converter.crdt_graph_to_yaml_node(graph)

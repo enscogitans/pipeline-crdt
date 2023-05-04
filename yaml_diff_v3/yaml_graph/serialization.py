@@ -38,10 +38,11 @@ def _deserialize_scalar(serialized: yaml.ScalarNode, path: NodePath) -> nodes.Sc
 
 
 def _serialize_scalar(node: nodes.ScalarNode) -> yaml.ScalarNode:
+    style = "|" if "\n" in node.value else None  # TODO: store style in node
     return yaml.ScalarNode(
         tag=node.tag,
         value=node.value,
-        style=None,  # TODO: fill
+        style=style,
         anchor=node.anchor,
         **_get_default_yaml_kwargs(),
     )

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import NewType
 
-from yaml_diff_v3.crdt_graph.nodes import NodeId, MappingNode, Timestamp
+from yaml_diff_v3.crdt_graph.nodes import NodeId, MappingNode, Timestamp, Comment
 
 SessionId = NewType("SessionId", str)
 UpdateId = NewType("UpdateId", str)
@@ -19,6 +19,12 @@ class EditScalarNode(Update):
     node_id: NodeId
     new_yaml_tag: str
     new_value: str
+
+
+@dataclass
+class EditComment(Update):
+    node_id: NodeId
+    new_comment: Comment
 
 
 @dataclass

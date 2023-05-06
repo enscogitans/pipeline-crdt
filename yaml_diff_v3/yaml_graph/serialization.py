@@ -7,15 +7,56 @@ from yaml_diff_v3.yaml_graph import nodes
 from yaml_diff_v3.yaml_graph.nodes import NodePath, NodePathKey
 
 
-def _make_dummy_mark() -> FileMark:
-    return FileMark("<file>", 0, 0, 0)
+def _make_dummy_mark(column: int = 0) -> FileMark:
+    return FileMark("<file>", 0, 0, column=column)
+
+
+def _serialize_comment_token(token: nodes.Comment.Token) -> yaml.CommentToken:
+    return yaml.CommentToken(
+        value=token.value,
+        # It is essential to set column to both these places. Otherwise, it won't work
+        column=token.column,
+        start_mark=_make_dummy_mark(column=token.column),
+    )
+
+
+def _deserialize_comment(yaml_comment: None | list[None | yaml.CommentToken]) -> None | nodes.Comment:
+    if yaml_comment is None:
+        return None
+    tokens: list[None | nodes.Comment.Token | tuple[nodes.Comment.Token]] = []
+    for token in yaml_comment:
+        if token is None:
+            tokens.append(None)
+        elif isinstance(token, yaml.CommentToken):
+            tokens.append(nodes.Comment.Token(token.value, token.column))
+        else:
+            assert isinstance(token, list)
+            assert all(isinstance(inner, yaml.CommentToken) for inner in token)
+            tokens.append(tuple(nodes.Comment.Token(inner.value, inner.column) for inner in token))
+    return nodes.Comment(tuple(tokens))
+
+
+def _serialize_comment(node_comment: None | nodes.Comment) -> None | list[None |
+                                                                          yaml.CommentToken | list[yaml.CommentToken]]:
+    if node_comment is None:
+        return None
+    result = []
+    for value in node_comment.values:
+        if value is None:
+            result.append(None)
+        elif isinstance(value, nodes.Comment.Token):
+            result.append(_serialize_comment_token(value))
+        else:
+            assert isinstance(value, tuple)
+            assert all(isinstance(inner, nodes.Comment.Token) for inner in value)
+            result.append([_serialize_comment_token(inner) for inner in value])
+    return result
 
 
 def _get_default_yaml_kwargs():
     return dict(
         start_mark=_make_dummy_mark(),  # Can't be None
         end_mark=_make_dummy_mark(),
-        comment=None,
     )
 
 
@@ -34,6 +75,7 @@ def _deserialize_scalar(serialized: yaml.ScalarNode, path: NodePath) -> nodes.Sc
         tag=serialized.tag,
         value=serialized.value,
         anchor=serialized.anchor,
+        comment=_deserialize_comment(serialized.comment),
     )
 
 
@@ -44,6 +86,7 @@ def _serialize_scalar(node: nodes.ScalarNode) -> yaml.ScalarNode:
         value=node.value,
         style=style,
         anchor=node.anchor,
+        comment=_serialize_comment(node.comment),
         **_get_default_yaml_kwargs(),
     )
 
@@ -60,7 +103,13 @@ def _deserialize_mapping(serialized: yaml.MappingNode, path: NodePath,
         value_node = _deserialize_node(value, item_path + (1,), deserialized_nodes)
         items[path_key] = nodes.MappingNode.Item(key=key_node, value=value_node, path_key=path_key)
 
-    return nodes.MappingNode(path=path, tag=serialized.tag, items=items, anchor=serialized.anchor)
+    return nodes.MappingNode(
+        path=path,
+        tag=serialized.tag,
+        items=items,
+        anchor=serialized.anchor,
+        comment=_deserialize_comment(serialized.comment),
+    )
 
 
 def _serialize_mapping(node: nodes.MappingNode, serialized_nodes: dict[nodes.Node, yaml.Node]) -> yaml.MappingNode:
@@ -70,6 +119,7 @@ def _serialize_mapping(node: nodes.MappingNode, serialized_nodes: dict[nodes.Nod
                 _serialize_node(item.value, serialized_nodes)) for item in node.items.values()],
         flow_style=None,  # TODO: fill
         anchor=node.anchor,
+        comment=_serialize_comment(node.comment),
         **_get_default_yaml_kwargs(),
     )
     serialized.merge = None  # TODO: find out when it is not None
@@ -84,6 +134,7 @@ def _deserialize_sequence(serialized: yaml.SequenceNode, path: NodePath,
         values=tuple(_deserialize_node(value, path + (i,), deserialized_nodes)
                      for i, value in enumerate(serialized.value)),
         anchor=serialized.anchor,
+        comment=_deserialize_comment(serialized.comment),
     )
 
 
@@ -93,6 +144,7 @@ def _serialize_sequence(node: nodes.SequenceNode, serialized_nodes: dict[nodes.N
         value=[_serialize_node(value, serialized_nodes) for value in node.values],
         flow_style=None,  # TODO: fill
         anchor=node.anchor,
+        comment=_serialize_comment(node.comment),
         **_get_default_yaml_kwargs(),
     )
 

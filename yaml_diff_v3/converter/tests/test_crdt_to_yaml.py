@@ -37,3 +37,19 @@ def test_reference():
         A: &a 1
         B: *a
     """)
+
+
+def test_comments():
+    check("""
+        # Comment
+        A: 1
+    """)
+    check("""
+           # Shifted Comment
+        A: 1
+    """)
+    check("""
+         # Some
+        A: 1     # mess
+           # with comments 
+    """)

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import NewType
 
 from yaml_diff_v3 import yaml_graph
+from yaml_diff_v3.yaml_graph.nodes import Comment
 
 NodeId = NewType("NodeId", str)
 Timestamp = NewType("Timestamp", int)
@@ -18,6 +19,8 @@ class _NodeBase(abc.ABC):
     yaml_path: yaml_graph.NodePath  # TODO: do not store it in the Node
     last_edit_ts: Timestamp
     is_deprecated: bool
+    comment: None | Comment
+    last_comment_edit_ts: Timestamp
     # is_all_parents_hidden: bool
 
     @property

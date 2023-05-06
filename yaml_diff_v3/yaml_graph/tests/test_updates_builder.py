@@ -1,9 +1,9 @@
 from collections import OrderedDict
 
 from yaml_diff_v3.utils import loads_yaml_node, get_tag
-from yaml_diff_v3.yaml_graph.nodes import ScalarNode, MappingNode
+from yaml_diff_v3.yaml_graph.nodes import ScalarNode, MappingNode, Comment
 from yaml_diff_v3.yaml_graph.serialization import deserialize
-from yaml_diff_v3.yaml_graph.updates import EditScalarNode, AddMapItem, DeleteMapItem
+from yaml_diff_v3.yaml_graph.updates import EditScalarNode, AddMapItem, DeleteMapItem, EditComment
 from yaml_diff_v3.yaml_graph.updates_builder import build_updates
 
 
@@ -34,20 +34,20 @@ def test_add_map_item():
     check("A: 1", "A: 1\nB: 2",
           [AddMapItem(map_path=(), new_item=MappingNode.Item(
               path_key="B",
-              key=ScalarNode(path=("B", 0), tag=get_tag("str"), value="B", anchor=None),
-              value=ScalarNode(path=("B", 1), tag=get_tag("int"), value="2", anchor=None),
+              key=ScalarNode(path=("B", 0), tag=get_tag("str"), value="B", anchor=None, comment=None),
+              value=ScalarNode(path=("B", 1), tag=get_tag("int"), value="2", anchor=None, comment=None),
           ))])
 
     a = "[1, 2, {B: 2}]"
     b = "[1, 2, {B: 2, A: {X: x}}]"
     new_item = MappingNode.Item(
         path_key="A",
-        key=ScalarNode(path=(2, "A", 0), tag=get_tag("str"), value="A", anchor=None),
-        value=MappingNode(path=(2, "A", 1), tag=get_tag("map"), anchor=None, items=OrderedDict({
+        key=ScalarNode(path=(2, "A", 0), tag=get_tag("str"), value="A", anchor=None, comment=None),
+        value=MappingNode(path=(2, "A", 1), tag=get_tag("map"), anchor=None, comment=None, items=OrderedDict({
             "X": MappingNode.Item(
                 path_key="X",
-                key=ScalarNode(path=(2, "A", 1, "X", 0), tag=get_tag("str"), value="X", anchor=None),
-                value=ScalarNode(path=(2, "A", 1, "X", 1), tag=get_tag("str"), value="x", anchor=None),
+                key=ScalarNode(path=(2, "A", 1, "X", 0), tag=get_tag("str"), value="X", anchor=None, comment=None),
+                value=ScalarNode(path=(2, "A", 1, "X", 1), tag=get_tag("str"), value="x", anchor=None, comment=None),
             )
         }))
     )
@@ -78,6 +78,11 @@ def test_update_referred_produces_one_update():
     """
     check(a, b, [AddMapItem(map_path=("A", 1), new_item=MappingNode.Item(
         path_key="Y",
-        key=ScalarNode(path=("A", 1, "Y", 0), tag=get_tag("str"), value="Y", anchor=None),
-        value=ScalarNode(path=("A", 1, "Y", 1), tag=get_tag("str"), value="y", anchor=None),
+        key=ScalarNode(path=("A", 1, "Y", 0), tag=get_tag("str"), value="Y", anchor=None, comment=None),
+        value=ScalarNode(path=("A", 1, "Y", 1), tag=get_tag("str"), value="y", anchor=None, comment=None),
     ))])
+
+
+def test_edit_comment():
+    check("A: 1", "A: 1    # comment", [EditComment(path=("A", 1), new_comment=Comment(
+        values=(Comment.Token(value="# comment\n", column=8), None)))])

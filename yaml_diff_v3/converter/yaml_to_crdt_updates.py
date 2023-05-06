@@ -2,7 +2,8 @@ import yaml_diff_v3.yaml_graph.updates as yaml
 from yaml_diff_v3.converter.new_yaml_node_to_crdt_node import make_new_crdt_mapping_item_from_yaml
 from yaml_diff_v3.crdt_graph.graph import Graph
 from yaml_diff_v3.crdt_graph.nodes import Node, Timestamp
-from yaml_diff_v3.crdt_graph.updates import SessionId, EditScalarNode, UpdateId, Update, AddMapItem, DeleteMapItem
+from yaml_diff_v3.crdt_graph.updates import SessionId, EditScalarNode, EditComment, UpdateId, Update, AddMapItem, \
+    DeleteMapItem
 from yaml_diff_v3.utils import make_unique_id
 
 
@@ -15,6 +16,17 @@ def _convert_edit_scalar_node(yaml_update: yaml.EditScalarNode, session_id: Sess
         node_id=path_to_node_mapping[yaml_update.path].id,
         new_yaml_tag=yaml_update.tag,
         new_value=yaml_update.value,
+    )
+
+
+def _convert_edit_comment(yaml_update: yaml.EditComment, session_id: SessionId, ts: Timestamp,
+                          path_to_node_mapping: dict[yaml.NodePath, Node]) -> EditComment:
+    return EditComment(
+        session_id=session_id,
+        timestamp=ts,
+        update_id=UpdateId(make_unique_id()),
+        node_id=path_to_node_mapping[yaml_update.path].id,
+        new_comment=yaml_update.new_comment,
     )
 
 
@@ -49,6 +61,8 @@ def make_crdt_updates_from_yaml_updates(yaml_updates: list[yaml.Update], session
         converted: Update
         if isinstance(yaml_update, yaml.EditScalarNode):
             converted = _convert_edit_scalar_node(yaml_update, session_id, ts, path_to_node_mapping)
+        elif isinstance(yaml_update, yaml.EditComment):
+            converted = _convert_edit_comment(yaml_update, session_id, ts, path_to_node_mapping)
         elif isinstance(yaml_update, yaml.AddMapItem):
             converted = _convert_add_map_item(yaml_update, session_id, ts, path_to_node_mapping)
         elif isinstance(yaml_update, yaml.DeleteMapItem):

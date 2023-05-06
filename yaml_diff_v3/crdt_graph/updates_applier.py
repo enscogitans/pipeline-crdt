@@ -2,7 +2,7 @@ from copy import deepcopy
 
 from yaml_diff_v3.crdt_graph.graph import Graph
 from yaml_diff_v3.crdt_graph.nodes import ScalarNode, MappingNode
-from yaml_diff_v3.crdt_graph.updates import Update, UpdateId, EditScalarNode, AddMapItem, DeleteMapItem
+from yaml_diff_v3.crdt_graph.updates import Update, UpdateId, EditScalarNode, AddMapItem, DeleteMapItem, EditComment
 
 
 class UpdatesApplier:
@@ -19,6 +19,8 @@ class UpdatesApplier:
     def _apply_update(self, graph: Graph, update: Update) -> None:
         if isinstance(update, EditScalarNode):
             self._apply_edit_scalar(graph, update)
+        elif isinstance(update, EditComment):
+            self._apply_edit_comment(graph, update)
         elif isinstance(update, AddMapItem):
             self._apply_add_map_item(graph, update)
         elif isinstance(update, DeleteMapItem):
@@ -35,6 +37,15 @@ class UpdatesApplier:
         node.yaml_tag = update.new_yaml_tag
         node.value = update.new_value
         node.last_edit_ts = update.timestamp
+
+    @staticmethod
+    def _apply_edit_comment(graph: Graph, update: EditComment) -> None:
+        node = graph.get_node(update.node_id)
+        assert isinstance(node, (ScalarNode, MappingNode))
+        if node.last_comment_edit_ts > update.timestamp:
+            return
+        node.comment = update.new_comment
+        node.last_comment_edit_ts = update.timestamp
 
     @staticmethod
     def _apply_add_map_item(graph: Graph, update: AddMapItem) -> None:

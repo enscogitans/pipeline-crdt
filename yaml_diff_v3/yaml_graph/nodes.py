@@ -6,10 +6,22 @@ NodePath: typing.TypeAlias = tuple[NodePathKey, ...]
 
 
 @dataclass(frozen=True)
+class Comment:
+    @dataclass(frozen=True)
+    class Token:
+        value: str
+        column: int
+
+    # see some information in ruamel.yaml.comments.Comment and ruamel.yaml.tokens.CommentToken
+    values: tuple[None | Token | tuple[Token, ...], ...]
+
+
+@dataclass(frozen=True)
 class _NodeBase:
     path: NodePath
     tag: str
     anchor: None | str
+    comment: None | Comment
 
 
 @dataclass(frozen=True)

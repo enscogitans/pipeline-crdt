@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Union
 
-from yaml_diff_v3.yaml_graph.nodes import NodePath, MappingNode
+from yaml_diff_v3.yaml_graph.nodes import NodePath, MappingNode, Comment
 
 
 @dataclass(frozen=True)
@@ -9,6 +9,12 @@ class EditScalarNode:
     path: NodePath
     tag: str
     value: str
+
+
+@dataclass(frozen=True)
+class EditComment:
+    path: NodePath
+    new_comment: Comment
 
 
 @dataclass(frozen=True)

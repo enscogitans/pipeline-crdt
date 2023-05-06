@@ -5,16 +5,17 @@ import yaml_diff_v3.yaml_graph.nodes as yaml
 from yaml_diff_v3.utils import make_unique_id
 
 
-def _make_new_node_kwargs(node_id: str, yaml_tag: str, anchor: None | str,
-                          yaml_path: yaml.NodePath, ts: crdt.Timestamp) -> dict[str, typing.Any]:
+def _make_new_node_kwargs(node_id: str, yaml_node: yaml.Node, ts: crdt.Timestamp) -> dict[str, typing.Any]:
     # See crdt.Node constructor
     return dict(
         id=crdt.NodeId(node_id),
-        yaml_tag=yaml_tag,
-        anchor=anchor,
-        yaml_path=yaml_path,
+        yaml_tag=yaml_node.tag,
+        anchor=yaml_node.anchor,
+        yaml_path=yaml_node.path,
         last_edit_ts=ts,
         is_deprecated=False,
+        comment=yaml_node.comment,
+        last_comment_edit_ts=ts,
         # is_all_parents_hidden=False,
     )
 
@@ -22,7 +23,7 @@ def _make_new_node_kwargs(node_id: str, yaml_tag: str, anchor: None | str,
 def _make_crdt_scalar_node(yaml_node: yaml.ScalarNode, node_id: str, ts: crdt.Timestamp) -> crdt.ScalarNode:
     return crdt.ScalarNode(
         value=yaml_node.value,
-        **_make_new_node_kwargs(node_id, yaml_node.tag, yaml_node.anchor, yaml_node.path, ts),
+        **_make_new_node_kwargs(node_id, yaml_node, ts),
     )
 
 
@@ -31,7 +32,7 @@ def _make_crdt_mapping_node(node_id: str, yaml_node: yaml.MappingNode, ts: crdt.
     return crdt.MappingNode(
         items=[make_new_crdt_mapping_item_from_yaml(yaml_item, ts, created_nodes)
                for yaml_item in yaml_node.items.values()],
-        **_make_new_node_kwargs(node_id, yaml_node.tag, yaml_node.anchor, yaml_node.path, ts),
+        **_make_new_node_kwargs(node_id, yaml_node, ts),
     )
 
 

@@ -9,6 +9,7 @@ def _scalar_to_yaml(node: crdt_graph.ScalarNode) -> yaml_graph.ScalarNode:
         tag=node.yaml_tag,
         value=node.value,
         anchor=node.anchor,
+        comment=node.comment,
     )
 
 
@@ -23,16 +24,24 @@ def _mapping_item_to_yaml(
     assert item.key.anchor is None, "Key can't cave an anchor"
     yaml_key: yaml_graph.Node
     if not has_same_key:
-        yaml_key = yaml_graph.ScalarNode(path=(), tag=item.key.yaml_tag, value=item.key.value, anchor=None)
+        yaml_key = yaml_graph.ScalarNode(
+            path=(),
+            tag=item.key.yaml_tag,
+            value=item.key.value,
+            anchor=None,
+            comment=item.key.comment,
+        )
     else:
         yaml_key = yaml_graph.SequenceNode(
             path=(),  # Note: path is not set because I was too lazy, and it is not used anyway
             tag=utils.get_tag("seq"),
             values=(
-                yaml_graph.ScalarNode(path=(), tag=item.key.yaml_tag, value=item.key.value, anchor=None),
-                yaml_graph.ScalarNode(path=(), tag=utils.get_tag("str"), value=item.value.id, anchor=None),
+                yaml_graph.ScalarNode(path=(), tag=item.key.yaml_tag, value=item.key.value, anchor=None, comment=None),
+                yaml_graph.ScalarNode(path=(), tag=utils.get_tag("str"), value=item.value.id,
+                                      anchor=None, comment=None),
             ),
             anchor=None,
+            comment=item.key.comment,  # I.e. move comment one level upper
         )
 
     yaml_item = yaml_graph.MappingNode.Item(
@@ -55,6 +64,7 @@ def _mapping_to_yaml(node: crdt_graph.MappingNode,
         tag=node.yaml_tag,
         items=items,
         anchor=node.anchor,
+        comment=node.comment,
     )
 
 

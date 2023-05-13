@@ -43,14 +43,24 @@ class ScalarNode(_NodeBase):
 class MappingNode(_NodeBase):
     @dataclass
     class Item:
+        id: NodeId
         key: ScalarNode
         # value is the main, key is its satellite. All operations applied to an Item modify value, not key
         value: "Node"
+        sort_key: str
+        last_timestamp_sort_key_edited: Timestamp
+
+        @property
+        def yaml_path(self) -> yaml_graph.NodePath:
+            return self.value.yaml_path[:-1]  # TODO: make it more correct
+
+        def get_children(self) -> list["Node"]:
+            return [self.value]
 
     items: list[Item]
 
-    def get_children(self) -> list["Node"]:
-        return [item.value for item in self.items]
+    def get_children(self) -> list["Item"]:
+        return self.items
 
 
 @dataclass

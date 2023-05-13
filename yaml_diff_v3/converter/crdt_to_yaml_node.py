@@ -47,6 +47,7 @@ def _mapping_item_to_yaml(
     yaml_item = yaml_graph.MappingNode.Item(
         key=yaml_key,
         value=_crdt_to_yaml_node(item.value, converted_nodes),
+        path=(),
         path_key=path_key,  # TODO: probably unnecessary
     )
     return path_key, yaml_item
@@ -55,9 +56,7 @@ def _mapping_item_to_yaml(
 def _mapping_to_yaml(node: crdt_graph.MappingNode,
                      converted_nodes: dict[crdt_graph.NodeId, yaml_graph.Node]) -> yaml_graph.MappingNode:
     items = OrderedDict(_mapping_item_to_yaml(node, item, converted_nodes)
-                        for item in sorted(
-                            node.items,
-                            key=lambda item: (getattr(item.value, "anchor", "") is None, item.key.value))
+                        for item in sorted(node.items, key=lambda item: item.sort_key)
                         if not item.value.is_hidden)
     return yaml_graph.MappingNode(
         path=node.yaml_path,

@@ -69,8 +69,8 @@ def dumps_yaml_node(yaml_data):
 def my_dedent(text):
     text = dedent(text)
     text = text.lstrip("\n")
-    text = text.rstrip()
-    return text + "\n"
+    lines = [line.rstrip() + "\n" for line in text.splitlines()]
+    return "".join(lines)
 
 
 def get_tag(type_: str) -> str:

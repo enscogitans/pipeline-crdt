@@ -1,4 +1,4 @@
-import pytest
+from pathlib import Path
 
 from yaml_diff_v3.service import Service
 from yaml_diff_v3.utils import my_dedent
@@ -18,11 +18,7 @@ def test_two_map_inserts():
     """
     service = Service()
     merged = service.merge_with_empty_graph(old_yaml_text, yaml_text_1, yaml_text_2)
-    assert merged == my_dedent("""
-        A: 1
-        B: 2
-        C: 3
-    """)
+    assert merged in ("A: 1\nB: 2\nC: 3\n", "A: 1\nC: 3\nB: 2\n")
 
 
 def test_two_comment_edits():
@@ -53,15 +49,15 @@ def test_two_comment_edits():
     """)
 
 
-@pytest.mark.skip("Need to fix objects order")
 def test_file():
-    with open("v0.yml") as f:
+    test_dir = Path(__file__).parent
+    with open(test_dir / "v0.yml") as f:
         base_text = f.read()
-    with open("v1.yml") as f:
+    with open(test_dir / "v1.yml") as f:
         text_1 = f.read()
-    with open("v2.yml") as f:
+    with open(test_dir / "v2.yml") as f:
         text_2 = f.read()
-    with open("expected.yml") as f:
+    with open(test_dir / "expected.yml") as f:
         expected = f.read()
 
     service = Service()

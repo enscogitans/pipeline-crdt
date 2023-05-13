@@ -20,6 +20,8 @@ class EditComment:
 @dataclass(frozen=True)
 class AddMapItem:
     map_path: NodePath
+    prev_item_path: None | NodePath  # prev item is an item in the new mapping
+    next_item_path: None | NodePath  # next item should present in old mapping
     new_item: MappingNode.Item
 
 
@@ -28,4 +30,10 @@ class DeleteMapItem:
     path: NodePath
 
 
-Update = Union[EditScalarNode, AddMapItem, DeleteMapItem]
+@dataclass(frozen=True)
+class EditMapOrder:
+    map_path: NodePath
+    new_order: tuple[NodePath, ...]  # paths of keys that are present in both dicts
+
+
+Update = Union[EditScalarNode, EditComment, AddMapItem, DeleteMapItem, EditMapOrder]

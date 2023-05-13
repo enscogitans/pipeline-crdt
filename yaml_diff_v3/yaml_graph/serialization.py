@@ -36,8 +36,8 @@ def _deserialize_comment(yaml_comment: None | list[None | yaml.CommentToken]) ->
     return nodes.Comment(tuple(tokens))
 
 
-def _serialize_comment(node_comment: None | nodes.Comment) -> None | list[None |
-                                                                          yaml.CommentToken | list[yaml.CommentToken]]:
+def _serialize_comment(node_comment: None | nodes.Comment) -> None | \
+                                                              list[None | yaml.CommentToken | list[yaml.CommentToken]]:
     if node_comment is None:
         return None
     result = []
@@ -101,7 +101,7 @@ def _deserialize_mapping(serialized: yaml.MappingNode, path: NodePath,
         item_path = path + (path_key,)
         key_node = _deserialize_node(key, item_path + (0,), deserialized_nodes)
         value_node = _deserialize_node(value, item_path + (1,), deserialized_nodes)
-        items[path_key] = nodes.MappingNode.Item(key=key_node, value=value_node, path_key=path_key)
+        items[path_key] = nodes.MappingNode.Item(key=key_node, value=value_node, path=item_path, path_key=path_key)
 
     return nodes.MappingNode(
         path=path,

@@ -29,9 +29,11 @@ def _make_crdt_scalar_node(yaml_node: yaml.ScalarNode, node_id: str, ts: crdt.Ti
 
 def _make_crdt_mapping_node(node_id: str, yaml_node: yaml.MappingNode, ts: crdt.Timestamp,
                             created_nodes: dict[yaml.NodePath, crdt.Node]) -> crdt.MappingNode:
+    n = len(str(len(yaml_node.items) - 1))  # number of digits
+    sort_keys = [f"{i:1>{n + 1}}R" for i in range(len(yaml_node.items))]  # 10, 11, ..., 19 if n = 10
     return crdt.MappingNode(
-        items=[make_new_crdt_mapping_item_from_yaml(yaml_item, ts, created_nodes)
-               for yaml_item in yaml_node.items.values()],
+        items=[make_new_crdt_mapping_item_from_yaml(yaml_item, ts, sort_key, created_nodes)
+               for yaml_item, sort_key in zip(yaml_node.items.values(), sort_keys)],
         **_make_new_node_kwargs(node_id, yaml_node, ts),
     )
 
@@ -56,13 +58,16 @@ def _make_crdt_node(node_id: str, yaml_node: yaml.Node, ts: crdt.Timestamp,
     return node
 
 
-def make_new_crdt_mapping_item_from_yaml(yaml_item: yaml.MappingNode.Item, ts: crdt.Timestamp,
+def make_new_crdt_mapping_item_from_yaml(yaml_item: yaml.MappingNode.Item, ts: crdt.Timestamp, sort_key: str,
                                          path_to_node_mapping: dict[yaml.NodePath, crdt.Node]) -> crdt.MappingNode.Item:
     if not isinstance(yaml_item.key, yaml.ScalarNode):
         raise TypeError(f"Locally added key can't be composite")
     return crdt.MappingNode.Item(
+        id=crdt.NodeId(make_unique_id()),
         key=_make_crdt_scalar_node(yaml_item.key, make_unique_id(), ts),
         value=_make_crdt_node(make_unique_id(), yaml_item.value, ts, created_nodes=path_to_node_mapping),
+        sort_key=sort_key,
+        last_timestamp_sort_key_edited=ts,
     )
 
 

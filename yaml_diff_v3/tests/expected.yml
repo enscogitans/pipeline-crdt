@@ -58,7 +58,7 @@ trial: &trial !Atom
         if i > 1:
             algorithm(reward=noise_bandit.reward)
         noise_bandit(actions=algorithm.actions, w=params.w)
-    
+
         observe(iteration_results)
 
 
@@ -71,12 +71,12 @@ pipeline: !GenericPipeline
       script: mkdir -p ${env.TARGETFOLDER}/metrics ${env.TARGETFOLDER}/charts
 
     list2: !CumulativeOracleActionPercentage
-      data_path: "${env.TARGETFOLDER}/data-*.parquet"
-      result_path: "${env.TARGETFOLDER}/metrics"
+      data_path: ${env.TARGETFOLDER}/data-*.parquet
+      result_path: ${env.TARGETFOLDER}/metrics
       columns_mapping:
-        selected_action_indexes: !PythonExpression >
+        selected_action_indexes: !PythonExpression |
           lambda row: row['actions']
-        all_action_rewards: !PythonExpression >
+        all_action_rewards: !PythonExpression |
           lambda row: row['all_reward']
 
     list3: !JupyterStage

@@ -36,3 +36,9 @@ class AddMapItem(Update):
 @dataclass
 class DeleteMapItem(Update):
     item_value_id: NodeId  # Id of deleted item.value
+
+
+@dataclass
+class EditMapItemSortKey(Update):
+    item_id: NodeId
+    new_sort_key: str

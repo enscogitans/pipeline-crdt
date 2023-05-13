@@ -2,7 +2,8 @@ from copy import deepcopy
 
 from yaml_diff_v3.crdt_graph.graph import Graph
 from yaml_diff_v3.crdt_graph.nodes import ScalarNode, MappingNode
-from yaml_diff_v3.crdt_graph.updates import Update, UpdateId, EditScalarNode, AddMapItem, DeleteMapItem, EditComment
+from yaml_diff_v3.crdt_graph.updates import Update, UpdateId, EditScalarNode, AddMapItem, DeleteMapItem, EditComment, \
+    EditMapItemSortKey
 
 
 class UpdatesApplier:
@@ -25,6 +26,8 @@ class UpdatesApplier:
             self._apply_add_map_item(graph, update)
         elif isinstance(update, DeleteMapItem):
             self._apply_delete_map_item(graph, update)
+        elif isinstance(update, EditMapItemSortKey):
+            self._apply_edit_map_item_sort_key(graph, update)
         else:
             raise TypeError(f"Unexpected update type {update}")
 
@@ -57,3 +60,10 @@ class UpdatesApplier:
     def _apply_delete_map_item(graph: Graph, update: DeleteMapItem) -> None:
         item_value = graph.get_node(update.item_value_id)
         item_value.is_deprecated = True
+
+    @staticmethod
+    def _apply_edit_map_item_sort_key(graph: Graph, update: EditMapItemSortKey) -> None:
+        item = graph.get_node(update.item_id)
+        if item.last_timestamp_sort_key_edited > update.timestamp:
+            return
+        item.sort_key = update.new_sort_key

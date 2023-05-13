@@ -87,3 +87,38 @@ def test_add_newlines():
         
         B: 2
     """)
+
+
+def test_dict_order():
+    check("""
+        A: 1
+        B: 2
+        C: 3
+    """, """
+        C: 3
+        B: 2
+        A: 1
+    """)
+
+
+def test_insert_order():
+    check("""
+        A:
+          b: 2
+        B: 2
+    """, """
+        A:
+          a: 1
+          b: 2
+        B: 2
+    """)
+    check("""
+        A:
+          a: 1
+        B: 2
+    """, """
+        A:
+          a: 1
+          b: 2
+        B: 2
+    """)

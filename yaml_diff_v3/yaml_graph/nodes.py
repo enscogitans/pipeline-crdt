@@ -35,6 +35,7 @@ class MappingNode(_NodeBase):
     class Item:
         key: "Node"
         value: "Node"
+        path: NodePath
         path_key: NodePathKey
 
     items: typing.OrderedDict[str, Item]

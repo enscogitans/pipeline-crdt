@@ -64,6 +64,24 @@ class MappingNode(_NodeBase):
 
 
 @dataclass
+class SequenceNode(_NodeBase):
+    @dataclass
+    class Item:
+        id: NodeId
+        value: "Node"
+        sort_key: str
+        last_timestamp_sort_key_edited: Timestamp
+
+        def get_children(self) -> list["Node"]:
+            return [self.value]
+
+    items: list[Item]
+
+    def get_children(self) -> list["Item"]:
+        return self.items
+
+
+@dataclass
 class ReferenceNode:
     id: NodeId
     referred_id: NodeId
@@ -78,4 +96,4 @@ class ReferenceNode:
         return []
 
 
-Node = typing.Union[ScalarNode, MappingNode, ReferenceNode]
+Node = typing.Union[ScalarNode, MappingNode, SequenceNode, ReferenceNode]

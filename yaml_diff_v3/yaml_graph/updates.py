@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Union
 
-from yaml_diff_v3.yaml_graph.nodes import NodePath, MappingNode, Comment
+from yaml_diff_v3.yaml_graph.nodes import NodePath, MappingNode, Comment, SequenceNode
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,19 @@ class AddMapItem:
 
 
 @dataclass(frozen=True)
+class AddListItem:
+    list_path: NodePath
+    insertion_index: int
+    new_item: SequenceNode.Item
+
+
+@dataclass(frozen=True)
 class DeleteMapItem:
+    path: NodePath
+
+
+@dataclass(frozen=True)
+class DeleteListItem:
     path: NodePath
 
 
@@ -36,4 +48,11 @@ class EditMapOrder:
     new_order: tuple[NodePath, ...]  # paths of keys that are present in both dicts
 
 
-Update = Union[EditScalarNode, EditComment, AddMapItem, DeleteMapItem, EditMapOrder]
+@dataclass(frozen=True)
+class EditListOrder:
+    list_path: NodePath
+    new_order: tuple[int, ...]  # permutation of values from old list which present in a new list
+
+
+Update = Union[EditScalarNode, EditComment, AddMapItem, DeleteMapItem, AddListItem, DeleteListItem,
+               EditMapOrder, EditListOrder]

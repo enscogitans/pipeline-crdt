@@ -1,3 +1,5 @@
+import pytest
+
 from yaml_diff_v3.service import Service, Timestamp, SessionId
 from yaml_diff_v3.utils import my_dedent
 
@@ -121,4 +123,69 @@ def test_insert_order():
           a: 1
           b: 2
         B: 2
+    """)
+
+
+def test_list_order():
+    check("""
+        - 1
+        - 2
+        - 3
+    """, """
+        - 3
+        - 2
+        - 1
+    """)
+
+
+def test_list_order_and_edit():
+    check("""
+        - - 1
+          - 2
+        - - a
+          - b
+    """, """
+        - - b
+          - a
+        - - 22
+          - 11
+    """)
+
+
+def test_add_list_item():
+    check("""
+        - 1
+    """, """
+        - 1
+        - 2
+    """)
+
+
+def test_delete_list_item():
+    check("""
+        - 1
+        - 2
+        - 3
+    """, """
+        - 1
+
+        - 3
+    """)
+
+
+@pytest.mark.skip("Fix dict keys")
+def test_delete_dict_item_inside_list():
+    check("""
+        - 1
+        -
+          A: a
+          B: b
+          C: c
+        - 3
+    """, """
+        - 
+          C: c
+          B: b
+        - 3
+        - 1
     """)

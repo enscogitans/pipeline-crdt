@@ -67,6 +67,20 @@ def _mapping_to_yaml(node: crdt_graph.MappingNode,
     )
 
 
+def _sequence_to_yaml(node: crdt_graph.SequenceNode,
+                      converted_nodes: dict[crdt_graph.NodeId, yaml_graph.Node]) -> yaml_graph.SequenceNode:
+    values = tuple(yaml_graph.SequenceNode.Item(_crdt_to_yaml_node(item.value, converted_nodes))
+                   for item in sorted(node.items, key=lambda item: item.sort_key)
+                   if not item.value.is_hidden)
+    return yaml_graph.SequenceNode(
+        path=node.yaml_path,
+        tag=node.yaml_tag,
+        values=values,
+        anchor=node.anchor,
+        comment=node.comment,
+    )
+
+
 def _crdt_to_yaml_node(crdt_node: crdt_graph.Node,
                        converted_nodes: dict[crdt_graph.NodeId, yaml_graph.Node]) -> yaml_graph.Node:
     if isinstance(crdt_node, crdt_graph.ReferenceNode):
@@ -78,6 +92,8 @@ def _crdt_to_yaml_node(crdt_node: crdt_graph.Node,
         converted = _scalar_to_yaml(crdt_node)
     elif isinstance(crdt_node, crdt_graph.MappingNode):
         converted = _mapping_to_yaml(crdt_node, converted_nodes)
+    elif isinstance(crdt_node, crdt_graph.SequenceNode):
+        converted = _sequence_to_yaml(crdt_node, converted_nodes)
     else:
         raise TypeError(f"Unexpected crdt node type {crdt_node}")
 

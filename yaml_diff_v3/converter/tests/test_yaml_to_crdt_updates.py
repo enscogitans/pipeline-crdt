@@ -1,7 +1,8 @@
 from yaml_diff_v3 import yaml_graph, utils, crdt_graph
 from yaml_diff_v3.converter import make_new_crdt_node_from_yaml, make_crdt_updates_from_yaml_updates
-from yaml_diff_v3.crdt_graph import Timestamp, SessionId
-from yaml_diff_v3.crdt_graph.updates import DeleteMapItem, EditComment, EditScalarNode, EditMapItemSortKey, AddMapItem
+from yaml_diff_v3.crdt_graph import Timestamp, SessionId, MappingNode
+from yaml_diff_v3.crdt_graph.updates import DeleteMapItem, EditComment, EditScalarNode, EditMapItemSortKey, AddMapItem, \
+    AddListItem
 from yaml_diff_v3.utils import my_dedent
 
 
@@ -87,3 +88,45 @@ def test_add_map_items_with_order():
     assert c_sort_key < b_sort_key
     assert b_sort_key < a_sort_key
     assert a_sort_key < x_sort_key
+
+
+def test_add_list_item():
+    _, updates = make_crdt_updates("""
+        - 1
+        - 3
+    """, """
+        - 1
+        - 2
+        - 3
+    """)
+
+    assert len(updates) == 1
+    assert isinstance(updates[0], AddListItem)
+    assert isinstance(updates[0].new_item.value, crdt_graph.ScalarNode)
+    assert updates[0].new_item.value.value == "2"
+
+
+def test_add_and_edit_list_item():
+    _, updates = make_crdt_updates("""
+        A: 1
+        B: 
+          - 1
+          - 3
+    """, """
+        A: 1
+        B: 
+          - X: x
+          - 2
+          - 3
+    """)
+
+    assert len(updates) == 2
+    upd_0, upd_1 = updates
+    if isinstance(upd_0, EditScalarNode):
+        upd_0, upd_1 = upd_1, upd_0
+
+    assert isinstance(upd_0, AddListItem)
+    assert isinstance(upd_0.new_item.value, MappingNode)
+
+    assert isinstance(upd_1, EditScalarNode)
+    assert upd_1.new_value == "2"

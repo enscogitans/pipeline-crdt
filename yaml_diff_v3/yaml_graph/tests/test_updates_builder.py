@@ -1,9 +1,10 @@
 from collections import OrderedDict
 
 from yaml_diff_v3.utils import loads_yaml_node, get_tag
-from yaml_diff_v3.yaml_graph.nodes import ScalarNode, MappingNode, Comment
+from yaml_diff_v3.yaml_graph.nodes import ScalarNode, MappingNode, Comment, SequenceNode
 from yaml_diff_v3.yaml_graph.serialization import deserialize
-from yaml_diff_v3.yaml_graph.updates import EditScalarNode, AddMapItem, DeleteMapItem, EditComment, EditMapOrder
+from yaml_diff_v3.yaml_graph.updates import EditScalarNode, AddMapItem, DeleteMapItem, EditComment, EditMapOrder, \
+    EditListOrder, AddListItem, DeleteListItem
 from yaml_diff_v3.yaml_graph.updates_builder import build_updates
 
 
@@ -14,10 +15,14 @@ def get_updates(text_1, text_2):
     return updates
 
 
-def check(text_1, text_2, expected_updates):
+def check(text_1, text_2, expected_updates, is_subset=False):
     updates = get_updates(text_1, text_2)
     assert len(updates) == len(set(updates))
-    assert set(updates) == set(expected_updates)
+    if is_subset:
+        assert set(updates) >= set(expected_updates)
+    else:
+        assert len(updates) == len(set(updates))
+        assert set(updates) == set(expected_updates)
 
 
 def test_edit_scalar():
@@ -132,7 +137,7 @@ def test_update_referred_produces_one_update():
             path_key="Y",
             key=ScalarNode(path=("A", 1, "Y", 0), tag=get_tag("str"), value="Y", anchor=None, comment=None),
             value=ScalarNode(path=("A", 1, "Y", 1), tag=get_tag("str"), value="y", anchor=None, comment=None),
-    ))])
+        ))])
 
 
 def test_edit_comment():
@@ -154,3 +159,170 @@ def test_edit_dict_order():
           a: 1
           b: 2
     """, [EditMapOrder(map_path=(), new_order=(("B",), ("A",)))])
+
+
+def test_edit_list_order():
+    check("""
+        - 0
+        - 1
+        - 2
+    """, """
+        - 1
+        - 0
+        - 2
+    """, [EditListOrder(list_path=(), new_order=(1, 0, 2))])
+    check("""
+        -
+          - 1
+          - 11
+        - 2
+        - 3
+    """, """
+        - 2
+        -
+          - 11
+          - 1
+        - 3
+    """, [
+        EditListOrder(list_path=(), new_order=(1, 0, 2)),
+        EditListOrder(list_path=(0,), new_order=(1, 0)),
+    ])
+    check("""
+        -
+          - 1
+          - 2
+        - 2
+    """, """
+        - 2
+        -
+          - 3
+          - 1
+    """, [EditListOrder(list_path=(), new_order=(1, 0)), EditListOrder(list_path=(0,), new_order=(1, 0))],
+          is_subset=True)
+
+
+def test_edit_dict_order_inside_shuffled_list():
+    check("""
+        -
+          a: 1
+          b: 2
+        - 2
+    """, """
+        - 2
+        -
+          b: 2
+          a: 1
+    """, [EditMapOrder(map_path=(0,), new_order=((0, "b"), (0, "a",)))], is_subset=True)
+
+
+def test_edit_list_item():
+    check("""
+        -
+          - a
+          - b
+    """, """
+        -
+          - aa
+          - bb
+    """, [
+        EditScalarNode(path=(0, 0), tag=get_tag("str"), value="aa"),
+        EditScalarNode(path=(0, 1), tag=get_tag("str"), value="bb")])
+
+
+def test_edit_dict_inside_list():
+    check("""
+        - 1
+        - 
+          A: a
+          B: b
+    """, """
+        - 1
+        - 
+          A: aa
+          B: bb
+    """, [
+        EditScalarNode(path=(1, "A", 1), tag=get_tag("str"), value="aa"),
+        EditScalarNode(path=(1, "B", 1), tag=get_tag("str"), value="bb")])
+
+
+def test_edit_list_add_scalar_delete_dict():
+    check("""
+        - 1
+        - 
+          A: a
+          B: b
+    """, """
+        - 1
+        - 2
+    """, [
+        DeleteListItem(path=(1,)),
+        AddListItem(list_path=(), insertion_index=1, new_item=SequenceNode.Item(
+            ScalarNode(path=(1,), tag=get_tag("int"), value="2", anchor=None, comment=None)))]
+          )
+
+
+def test_add_list_item():
+    check("""
+        - 1
+    """, """
+        - 2
+        - 1
+    """, [
+        AddListItem(list_path=(), insertion_index=0, new_item=SequenceNode.Item(
+            ScalarNode(path=(0,), tag=get_tag("int"), value="2", anchor=None, comment=None)))])
+    check("""
+        - 1
+        - 
+          - a
+          - b
+    """, """
+        - 1
+        - 
+          - a
+          - c
+          - b
+    """, [
+        AddListItem(list_path=(1,), insertion_index=1, new_item=SequenceNode.Item(
+            ScalarNode(path=(1, 1), tag=get_tag("str"), value="c", anchor=None, comment=None)))])
+
+
+def test_shuffle_and_add_list_item():
+    check("""
+        -
+          - 1
+          - 3
+          - 5
+    """, """
+        -
+          - 5
+          - 4
+          - 3
+          - 2
+          - 1
+    """, [
+        EditListOrder(list_path=(0,), new_order=(2, 1, 0)),
+        AddListItem(list_path=(0,), insertion_index=1, new_item=SequenceNode.Item(ScalarNode(
+            path=(0, 1), tag=get_tag("int"), value="4", anchor=None, comment=None))),
+        AddListItem(list_path=(0,), insertion_index=3, new_item=SequenceNode.Item(ScalarNode(
+            path=(0, 3), tag=get_tag("int"), value="2", anchor=None, comment=None))),
+    ])
+
+
+def test_shuffle_and_delete_list_item():
+    check("""
+        -
+          - 5
+          - 4
+          - 3
+          - 2
+          - 1
+    """, """
+        -
+          - 1
+          - 3
+          - 5
+    """, [
+        EditListOrder(list_path=(0,), new_order=(4, 2, 0)),
+        DeleteListItem(path=(0, 1)),
+        DeleteListItem(path=(0, 3)),
+    ])

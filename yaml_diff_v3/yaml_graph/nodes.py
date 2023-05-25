@@ -47,7 +47,11 @@ class MappingNode(_NodeBase):
 
 @dataclass(frozen=True)
 class SequenceNode(_NodeBase):
-    values: tuple["Node", ...]
+    @dataclass(frozen=True)
+    class Item:
+        value: "Node"
+
+    values: tuple[Item, ...]
 
 
 @dataclass(frozen=True)

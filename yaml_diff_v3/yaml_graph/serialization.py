@@ -131,7 +131,7 @@ def _deserialize_sequence(serialized: yaml.SequenceNode, path: NodePath,
     return nodes.SequenceNode(
         path=path,
         tag=serialized.tag,
-        values=tuple(_deserialize_node(value, path + (i,), deserialized_nodes)
+        values=tuple(nodes.SequenceNode.Item(_deserialize_node(value, path + (i,), deserialized_nodes))
                      for i, value in enumerate(serialized.value)),
         anchor=serialized.anchor,
         comment=_deserialize_comment(serialized.comment),
@@ -141,7 +141,7 @@ def _deserialize_sequence(serialized: yaml.SequenceNode, path: NodePath,
 def _serialize_sequence(node: nodes.SequenceNode, serialized_nodes: dict[nodes.Node, yaml.Node]) -> yaml.SequenceNode:
     return yaml.SequenceNode(
         tag=node.tag,
-        value=[_serialize_node(value, serialized_nodes) for value in node.values],
+        value=[_serialize_node(item.value, serialized_nodes) for item in node.values],
         flow_style=None,  # TODO: fill
         anchor=node.anchor,
         comment=_serialize_comment(node.comment),

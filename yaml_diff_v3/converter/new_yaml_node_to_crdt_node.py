@@ -38,6 +38,26 @@ def _make_crdt_mapping_node(node_id: str, yaml_node: yaml.MappingNode, ts: crdt.
     )
 
 
+def _make_crdt_sequence_node(node_id: str, yaml_node: yaml.SequenceNode, ts: crdt.Timestamp,
+                             created_nodes: dict[yaml.NodePath, crdt.Node]) -> crdt.SequenceNode:
+    n = len(str(len(yaml_node.values) - 1))  # number of digits
+    sort_keys = [f"{i:1>{n + 1}}R" for i in range(len(yaml_node.values))]  # 10, 11, ..., 19 if n = 10
+
+    items = [
+        crdt.SequenceNode.Item(
+            id=crdt.NodeId(make_unique_id()),
+            value=_make_crdt_node(make_unique_id(), yaml_item.value, ts, created_nodes),
+            sort_key=sort_key,
+            last_timestamp_sort_key_edited=ts,
+        )
+        for yaml_item, sort_key in zip(yaml_node.values, sort_keys)
+    ]
+    return crdt.SequenceNode(
+        items=items,
+        **_make_new_node_kwargs(node_id, yaml_node, ts),
+    )
+
+
 def _make_crdt_node(node_id: str, yaml_node: yaml.Node, ts: crdt.Timestamp,
                     created_nodes: dict[yaml.NodePath, crdt.Node]) -> crdt.Node:
     if isinstance(yaml_node, yaml.ReferenceNode):
@@ -49,8 +69,8 @@ def _make_crdt_node(node_id: str, yaml_node: yaml.Node, ts: crdt.Timestamp,
         node = _make_crdt_scalar_node(yaml_node, node_id, ts)
     elif isinstance(yaml_node, yaml.MappingNode):
         node = _make_crdt_mapping_node(node_id, yaml_node, ts, created_nodes)
-    # elif isinstance(yaml_node, yaml.SequenceNode):
-    #     pass
+    elif isinstance(yaml_node, yaml.SequenceNode):
+        node = _make_crdt_sequence_node(node_id, yaml_node, ts, created_nodes)
     else:
         raise NotImplementedError(f"Unexpected yaml node {yaml_node}")
 

@@ -4,7 +4,8 @@ from collections import OrderedDict, defaultdict
 import deepdiff.operator
 from deepdiff import DeepDiff
 
-from yaml_diff_v3.yaml_graph.nodes import Node, ScalarNode, MappingNode, ReferenceNode, Comment, SequenceNode
+from yaml_diff_v3.yaml_graph.nodes import Node, ScalarNode, MappingNode, ReferenceNode, Comment, SequenceNode, \
+    NodePathKey
 from yaml_diff_v3.yaml_graph.updates import Update, EditScalarNode, AddMapItem, DeleteMapItem, EditComment, \
     EditMapOrder, AddListItem, EditListOrder, DeleteListItem
 
@@ -79,19 +80,18 @@ def _build_dictionary_item_added(items) -> list[Update]:
     for item in items:
         added_item = item.t2
         assert isinstance(added_item, MappingNode.Item)
-        key_path = added_item.key.path
-        item_path = key_path[:-1]
-        map_path = item_path[:-1]  # TODO: use t1 path
+        old_mapping_node = item.up.up.t1  # Item -> dict of items -> MappingNode
+        assert isinstance(old_mapping_node, MappingNode)
 
-        old_map, new_map = item.up.t1, item.up.t2
-        assert isinstance(old_map, OrderedDict) and isinstance(new_map, OrderedDict)
-        prev_item = _get_prev_item_in_ordered_dict(added_item, new_map)
-        next_item = _get_next_item_in_ordered_dict(added_item, new_map, old_map.keys())
+        old_dict, new_dict = item.up.t1, item.up.t2
+        assert isinstance(old_dict, OrderedDict) and isinstance(new_dict, OrderedDict)
+        prev_item = _get_prev_item_in_ordered_dict(added_item, new_dict)
+        next_item = _get_next_item_in_ordered_dict(added_item, new_dict, old_dict.keys())
 
         updates.append(AddMapItem(
-            map_path=map_path,
-            prev_item_path=None if prev_item is None else prev_item.path,  # TODO: use relative path (indices/keys)
-            next_item_path=None if next_item is None else next_item.path,
+            map_path=old_mapping_node.path,
+            prev_item_key=None if prev_item is None else prev_item.path_key,
+            next_item_key=None if next_item is None else next_item.path_key,
             new_item=added_item,
         ))
     return updates
@@ -142,8 +142,8 @@ def _build_list_item_added(items) -> list[Update]:
     return updates
 
 
-def _match_mapping_order(old_mapping: MappingNode, new_mapping: MappingNode):
-    # TODO: do not duplicate code
+def _match_mapping_order(old_mapping: MappingNode,
+                         new_mapping: MappingNode) -> tuple[tuple[NodePathKey, ...], tuple[NodePathKey, ...]]:
     common_keys = old_mapping.items.keys() & new_mapping.items.keys()
     old_order = tuple(key for key, item in old_mapping.items.items() if key in common_keys)
     new_order = tuple(key for key, item in new_mapping.items.items() if key in common_keys)
@@ -155,17 +155,14 @@ class _DictOrderOperator(deepdiff.operator.BaseOperator):
         super().__init__(types=[OrderedDict])  # only pairs of this type will be processed
 
     def give_up_diffing(self, level, diff_instance) -> bool:
-        old_dict, new_dict = level.t1, level.t2
-        assert isinstance(old_dict, OrderedDict) and isinstance(new_dict, OrderedDict)
-        common_keys = old_dict.keys() & new_dict.keys()
-        old_order = tuple(item.path for key, item in old_dict.items() if key in common_keys)
-        new_order = tuple(item.path for key, item in new_dict.items() if key in common_keys)
+        parent = level.up
+        assert isinstance(parent.t1, MappingNode) and isinstance(parent.t2, MappingNode)
+        old_mapping, new_mapping = parent.t1, parent.t2
+        old_order, new_order = _match_mapping_order(old_mapping, new_mapping)
         if old_order != new_order:
-            parent = level.up
-            assert isinstance(parent.t1, MappingNode) and isinstance(parent.t2, MappingNode)
-            # assert parent.t1.path == parent.t2.path
+            new_order_keys = tuple(new_mapping.items[key].path_key for key in new_order)
             diff_instance.custom_report_result(
-                "edit_dict_order", level, {"map_path": parent.t1.path, "old_order": old_order, "new_order": new_order},
+                "edit_dict_order", level, {"map_path": old_mapping.path, "new_order": new_order_keys},
             )
         return False  # do not stop diffing nested objects
 
@@ -247,14 +244,14 @@ class _ListOrderOperator(deepdiff.operator.BaseOperator):
         if (id(old_mapping), id(new_mapping)) in used_pairs:
             return []
         used_pairs.add((id(old_mapping), id(new_mapping)))
-        old_key_order, new_key_order = _match_mapping_order(old_mapping, new_mapping)
+        old_order, new_order = _match_mapping_order(old_mapping, new_mapping)
         result = []
-        if old_key_order != new_key_order:
+        if old_order != new_order:
             result.append(EditMapOrder(
                 map_path=old_mapping.path,
-                new_order=tuple(old_mapping.items[key].path for key in new_key_order),
+                new_order=tuple(new_mapping.items[key].path_key for key in new_order),
             ))
-        for key in new_key_order:
+        for key in new_order:
             old_item: MappingNode.Item = old_mapping.items[key]
             new_item: MappingNode.Item = new_mapping.items[key]
             if isinstance(old_item.value, SequenceNode):
@@ -314,7 +311,10 @@ def build_updates(old_graph: Node, new_graph: Node) -> list[Update]:
 
     updates: list[Update] = list_order_operator.make_edit_order_updates(hashes)
     if "edit_dict_order" in diff:
-        updates += _build_dictionary_edit_order(diff["edit_dict_order"])
+        dict_order_updates = _build_dictionary_edit_order(diff["edit_dict_order"])
+        # if dict was inside list, order could have been processed in list_order_operator.make_edit_order_updates
+        dict_order_updates = [upd for upd in dict_order_updates if upd not in updates]
+        updates += dict_order_updates
 
     comment_edit_items = []
     for operation in diff.tree.keys():

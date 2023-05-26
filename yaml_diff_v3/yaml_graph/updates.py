@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Union
 
-from yaml_diff_v3.yaml_graph.nodes import NodePath, MappingNode, Comment, SequenceNode
+from yaml_diff_v3.yaml_graph.nodes import NodePath, MappingNode, Comment, SequenceNode, NodePathKey
 
 
 @dataclass(frozen=True)
@@ -20,8 +20,8 @@ class EditComment:
 @dataclass(frozen=True)
 class AddMapItem:
     map_path: NodePath
-    prev_item_path: None | NodePath  # prev item is an item in the new mapping
-    next_item_path: None | NodePath  # next item should present in old mapping
+    prev_item_key: None | NodePathKey  # prev item is an item in the new mapping
+    next_item_key: None | NodePathKey  # next item should present in old mapping
     new_item: MappingNode.Item
 
 
@@ -45,7 +45,7 @@ class DeleteListItem:
 @dataclass(frozen=True)
 class EditMapOrder:
     map_path: NodePath
-    new_order: tuple[NodePath, ...]  # paths of keys that are present in both dicts
+    new_order: tuple[NodePathKey, ...]  # permutation of keys which are present in both dicts
 
 
 @dataclass(frozen=True)

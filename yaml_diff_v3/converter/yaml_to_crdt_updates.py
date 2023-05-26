@@ -33,12 +33,13 @@ def _convert_edit_comment(yaml_update: yaml.EditComment, session_id: SessionId, 
 
 def _convert_add_map_item(yaml_update: yaml.AddMapItem, session_id: SessionId, ts: Timestamp,
                           path_to_node_mapping: dict[yaml.NodePath, Node | MappingNode.Item],
-                          map_items_sort_keys: dict[yaml.NodePath, str]) -> AddMapItem:
-    prev_item_sort_key = None if yaml_update.prev_item_path is None else map_items_sort_keys[yaml_update.prev_item_path]
-    next_item_sort_key = None if yaml_update.next_item_path is None else map_items_sort_keys[yaml_update.next_item_path]
+                          map_items_sort_keys: dict[yaml.NodePath, dict[yaml.NodePathKey, str]]) -> AddMapItem:
+    sort_keys = map_items_sort_keys[yaml_update.map_path]
+    prev_item_sort_key = None if yaml_update.prev_item_key is None else sort_keys[yaml_update.prev_item_key]
+    next_item_sort_key = None if yaml_update.next_item_key is None else sort_keys[yaml_update.next_item_key]
 
     sort_key = _make_sort_key_between(prev_item_sort_key, next_item_sort_key)
-    map_items_sort_keys[yaml_update.new_item.path] = sort_key
+    sort_keys[yaml_update.new_item.path_key] = sort_key
 
     new_item = make_new_crdt_mapping_item_from_yaml(yaml_update.new_item, ts, sort_key, path_to_node_mapping)
     return AddMapItem(
@@ -155,10 +156,11 @@ def _make_sort_key_between(left_key: None | str, right_key: None | str) -> str:
 def _convert_edit_map_order(
         yaml_update: yaml.EditMapOrder, session_id: SessionId, ts: Timestamp,
         path_to_node_mapping: dict[yaml.NodePath, Node | MappingNode.Item],
-        map_items_sort_keys: dict[yaml.NodePath, str]) -> list[EditMapItemSortKey]:
+        map_items_sort_keys: dict[yaml.NodePath, dict[yaml.NodePathKey, str]]) -> list[EditMapItemSortKey]:
     result: list[EditMapItemSortKey] = []
 
-    new_order_items = [path_to_node_mapping[path] for path in yaml_update.new_order]
+    sort_keys = map_items_sort_keys[yaml_update.map_path]
+    new_order_items = [path_to_node_mapping[yaml_update.map_path + (key,)] for key in yaml_update.new_order]
 
     old_order_ids = [item.id for item in sorted(new_order_items, key=lambda item: item.sort_key)]
     new_order_ids = [item.id for item in new_order_items]
@@ -177,8 +179,10 @@ def _convert_edit_map_order(
                 break
 
         new_sort_key = _make_sort_key_between(prev_sort_key, next_sort_key)
-        assert item.yaml_path in map_items_sort_keys
-        map_items_sort_keys[item.yaml_path] = new_sort_key
+        path_key = item.yaml_path[-1]
+        assert sort_keys[path_key] == item.sort_key
+        sort_keys[path_key] = new_sort_key
+
         result.append(EditMapItemSortKey(
             session_id=session_id,
             timestamp=ts,
@@ -244,9 +248,10 @@ def make_crdt_updates_from_yaml_updates(yaml_updates: list[yaml.Update], session
     path_to_node_mapping = graph.get_path_to_node_mapping()
 
     # Handle sort keys first because they will be used in AddMapItem / AddListItem
-    map_items_sort_keys: dict[yaml.NodePath, str] = {
-        path: item.sort_key for path, item in path_to_node_mapping.items()
-        if isinstance(item, MappingNode.Item)
+    map_items_sort_keys: dict[yaml.NodePath, dict[yaml.NodePathKey, str]] = {
+        # map path -> item path key -> item sort key
+        map_path: {item.yaml_path[-1]: item.sort_key for item in map_node.items}
+        for map_path, map_node in path_to_node_mapping.items() if isinstance(map_node, MappingNode)
     }
     for yaml_update in yaml_updates:
         if isinstance(yaml_update, yaml.EditMapOrder):

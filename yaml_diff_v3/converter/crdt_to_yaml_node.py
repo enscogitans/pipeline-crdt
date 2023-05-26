@@ -18,7 +18,8 @@ def _mapping_item_to_yaml(
         item: crdt_graph.MappingNode.Item,
         converted_nodes: dict[crdt_graph.NodeId, yaml_graph.Node],
 ) -> tuple[yaml_graph.NodePathKey, yaml_graph.MappingNode.Item]:
-    has_same_key = 1 < sum(1 for mapping_item in mapping_node.items if mapping_item.key.value == item.key.value)
+    has_same_key = 1 < sum(1 for mapping_item in mapping_node.items
+                           if mapping_item.key.value == item.key.value and not mapping_item.value.is_hidden)
     path_key = (item.key.value, item.value.id) if has_same_key else item.key.value
 
     assert item.key.anchor is None, "Key can't cave an anchor"
@@ -36,9 +37,10 @@ def _mapping_item_to_yaml(
             path=(),  # Note: path is not set because I was too lazy, and it is not used anyway
             tag=utils.get_tag("seq"),
             values=(
-                yaml_graph.ScalarNode(path=(), tag=item.key.yaml_tag, value=item.key.value, anchor=None, comment=None),
-                yaml_graph.ScalarNode(path=(), tag=utils.get_tag("str"), value=item.value.id,
-                                      anchor=None, comment=None),
+                yaml_graph.SequenceNode.Item(yaml_graph.ScalarNode(
+                    path=(), tag=item.key.yaml_tag, value=item.key.value, anchor=None, comment=None)),
+                yaml_graph.SequenceNode.Item(yaml_graph.ScalarNode(
+                    path=(), tag=utils.get_tag("str"), value=item.value.id, anchor=None, comment=None)),
             ),
             anchor=None,
             comment=item.key.comment,  # I.e. move comment one level upper

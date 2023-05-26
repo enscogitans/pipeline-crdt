@@ -176,6 +176,8 @@ def _serialize_node(node: nodes.Node, serialized_nodes: dict[nodes.Node, yaml.No
         return serialized_nodes[node.referred_node]
 
     serialized: yaml.Node
+    if isinstance(node, str):
+        print(a)
     if isinstance(node, nodes.ScalarNode):
         serialized = _serialize_scalar(node)
     elif isinstance(node, nodes.MappingNode):

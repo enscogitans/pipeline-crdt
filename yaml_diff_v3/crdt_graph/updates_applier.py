@@ -79,6 +79,7 @@ class UpdatesApplier:
         list_node = graph.get_node(update.list_node_id)
         assert isinstance(list_node, SequenceNode)
         list_node.items.append(deepcopy(update.new_item))
+        list_node.items.sort(key=lambda item: item.sort_key)
 
     @staticmethod
     def _apply_delete_list_item(graph: Graph, update: DeleteListItem) -> None:

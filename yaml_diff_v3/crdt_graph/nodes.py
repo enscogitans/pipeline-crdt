@@ -1,10 +1,11 @@
 import abc
 import typing
+from collections import Counter
 from dataclasses import dataclass
 from typing import NewType
 
 from yaml_diff_v3 import yaml_graph
-from yaml_diff_v3.yaml_graph.nodes import Comment
+from yaml_diff_v3.yaml_graph.nodes import Comment, NodePathKey
 
 NodeId = NewType("NodeId", str)
 Timestamp = NewType("Timestamp", int)
@@ -28,14 +29,20 @@ class _NodeBase(abc.ABC):
         return self.is_deprecated  # and self.is_all_parents_hidden
 
     @abc.abstractmethod
-    def get_children(self) -> list["Node"]: ...
+    def get_children_with_path(self) -> list[tuple[NodePathKey, "Node"]]: ...
+
+    @abc.abstractmethod
+    def get_all_children(self) -> list["Node"]: ...
 
 
 @dataclass
 class ScalarNode(_NodeBase):
     value: str
 
-    def get_children(self) -> list["Node"]:
+    def get_all_children(self) -> list["Node"]:
+        return []
+
+    def get_children_with_path(self) -> list[tuple[NodePathKey, "Node"]]:
         return []
 
 
@@ -54,13 +61,33 @@ class MappingNode(_NodeBase):
         def yaml_path(self) -> yaml_graph.NodePath:
             return self.value.yaml_path[:-1]  # TODO: make it more correct
 
-        def get_children(self) -> list["Node"]:
+        def get_all_children(self) -> list["Node"]:
             return [self.value]
+
+        def get_children_with_path(self) -> list[tuple[NodePathKey, "Node"]]:
+            return [(1, self.value)]
 
     items: list[Item]
 
-    def get_children(self) -> list["Item"]:
+    def get_all_children(self):
         return self.items
+
+    def get_children_with_path(self) -> list[tuple[NodePathKey, "Node"]]:
+        result = []
+        duplicated_keys = {
+            key for key, cnt
+            in Counter(item.key.value for item in self.items if not item.value.is_hidden).items()
+            if cnt > 1
+        }
+        for item in self.items:
+            if item.value.is_hidden:
+                continue
+            if item.key.value in duplicated_keys:
+                path_key = (item.key.value, str(item.value.id))
+            else:
+                path_key = item.key.value
+            result.append((path_key, item))
+        return result
 
 
 @dataclass
@@ -72,13 +99,18 @@ class SequenceNode(_NodeBase):
         sort_key: str
         last_timestamp_sort_key_edited: Timestamp
 
-        def get_children(self) -> list["Node"]:
+        def get_all_children(self):
             return [self.value]
 
     items: list[Item]
 
-    def get_children(self) -> list["Item"]:
+    def get_all_children(self) -> list["Node"]:
         return self.items
+
+    def get_children_with_path(self) -> list[tuple[NodePathKey, "Node"]]:
+        items = sorted(self.items, key=lambda item: item.sort_key)
+        values = [item.value for item in items if not item.value.is_hidden]
+        return list(enumerate(values))
 
 
 @dataclass
@@ -92,7 +124,10 @@ class ReferenceNode:
     def is_hidden(self) -> bool:
         return self.is_deprecated
 
-    def get_children(self) -> list["Node"]:
+    def get_all_children(self) -> list["Node"]:
+        return []
+
+    def get_children_with_path(self) -> list[tuple[NodePathKey, "Node"]]:
         return []
 
 

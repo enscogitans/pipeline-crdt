@@ -1,5 +1,3 @@
-import pytest
-
 from yaml_diff_v3.service import Service, Timestamp, SessionId
 from yaml_diff_v3.utils import my_dedent
 
@@ -173,18 +171,15 @@ def test_delete_list_item():
     """)
 
 
-@pytest.mark.skip("Fix dict keys")
 def test_delete_dict_item_inside_list():
     check("""
         - 1
-        -
-          A: a
+        - A: a
           B: b
           C: c
         - 3
     """, """
-        - 
-          C: c
+        - C: c
           B: b
         - 3
         - 1

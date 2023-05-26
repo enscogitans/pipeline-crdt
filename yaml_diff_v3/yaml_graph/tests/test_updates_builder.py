@@ -44,8 +44,8 @@ def test_add_map_item():
     check("A: 1", "A: 1\nB: 2",
           [AddMapItem(
               map_path=(),
-              prev_item_path=("A",),
-              next_item_path=None,
+              prev_item_key="A",
+              next_item_key=None,
               new_item=MappingNode.Item(
                   path=("B",),
                   path_key="B",
@@ -68,7 +68,7 @@ def test_add_map_item():
             )
         }))
     )
-    check(a, b, [AddMapItem(map_path=(2,), prev_item_path=(2, "B"), next_item_path=None, new_item=new_item)])
+    check(a, b, [AddMapItem(map_path=(2,), prev_item_key="B", next_item_key=None, new_item=new_item)])
 
 
 def test_add_map_item_order():
@@ -89,14 +89,8 @@ def test_add_map_item_order():
 
     def check(update: AddMapItem, prev: None | str, next: None | str):
         assert update.map_path == ()
-        if prev is None:
-            assert update.prev_item_path is None
-        else:
-            assert update.prev_item_path == (prev,)
-        if next is None:
-            assert update.next_item_path is None
-        else:
-            assert update.next_item_path == (next,)
+        assert update.prev_item_key == prev
+        assert update.next_item_key == next
 
     assert len(updates) == 5
     check(updates[0], None, "C")  # add A
@@ -130,8 +124,8 @@ def test_update_referred_produces_one_update():
     """
     check(a, b, [AddMapItem(
         map_path=("A", 1),
-        prev_item_path=("A", 1, "X"),
-        next_item_path=None,
+        prev_item_key="X",
+        next_item_key=None,
         new_item=MappingNode.Item(
             path=("A", 1, "Y"),
             path_key="Y",
@@ -147,7 +141,7 @@ def test_edit_comment():
 
 def test_edit_dict_order():
     check("A: 1\nB: 2\nC: 3", "C: 3\nB: 2\nA: 1",
-          [EditMapOrder(map_path=(), new_order=(("C",), ("B",), ("A",)))])
+          [EditMapOrder(map_path=(), new_order=("C", "B", "A"))])
     check("""
         A:
           a: 1
@@ -158,7 +152,7 @@ def test_edit_dict_order():
         A:
           a: 1
           b: 2
-    """, [EditMapOrder(map_path=(), new_order=(("B",), ("A",)))])
+    """, [EditMapOrder(map_path=(), new_order=("B", "A"))])
 
 
 def test_edit_list_order():
@@ -212,7 +206,7 @@ def test_edit_dict_order_inside_shuffled_list():
         -
           b: 2
           a: 1
-    """, [EditMapOrder(map_path=(0,), new_order=((0, "b"), (0, "a",)))], is_subset=True)
+    """, [EditMapOrder(map_path=(0,), new_order=("b", "a"))], is_subset=True)
 
 
 def test_edit_list_item():

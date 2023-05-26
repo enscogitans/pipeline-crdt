@@ -1,5 +1,3 @@
-from typing import Generator
-
 from yaml_diff_v3 import yaml_graph
 from yaml_diff_v3.crdt_graph.nodes import Node, NodeId, MappingNode, SequenceNode
 
@@ -9,18 +7,29 @@ class Graph:
         self.root = root
 
     def get_path_to_node_mapping(self) -> dict[yaml_graph.NodePath, Node | MappingNode.Item]:
-        # TODO: eval yaml_path in runtime
-        return {node.yaml_path: node for node in self._iter_nodes()
-                if not isinstance(node, SequenceNode.Item)}
+        def dfs(node: Node, path):
+            if not isinstance(node, (MappingNode.Item, SequenceNode.Item)):  # they do not store it
+                node.yaml_path = path
+            yield path, node
+            for path_key, child in node.get_children_with_path():
+                yield from dfs(child, path + (path_key,))
+
+        return {path: node for path, node in dfs(self.root, ())}
 
     def get_node(self, node_id: NodeId) -> Node | MappingNode.Item:
-        [node] = [node for node in self._iter_nodes() if node.id == node_id]
-        return node
-
-    def _iter_nodes(self) -> Generator[Node | MappingNode.Item | SequenceNode.Item, None, None]:
-        def dfs(node: Node) -> Generator[Node | MappingNode.Item | SequenceNode, None, None]:
+        def dfs(node: Node):
             yield node
-            for child in node.get_children():
+            for child in node.get_all_children():
                 yield from dfs(child)
 
-        yield from dfs(self.root)
+        [node] = [node for node in dfs(self.root) if node.id == node_id]
+        return node
+
+    # def get_parent(self, node_id: NodeId) -> Node | MappingNode.Item | SequenceNode.Item:
+    #     def dfs(node: Node, parent):
+    #         yield node, parent
+    #         for child in node.get_all_children():
+    #             yield from dfs(child, node)
+    #
+    #     [(node, parent)] = [(node, parent) for node, parent in dfs(self.root, None) if node.id == node_id]
+    #     return node

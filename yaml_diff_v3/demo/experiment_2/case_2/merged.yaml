@@ -1,0 +1,5 @@
+pipeline:
+  A: 1
+  [B, f883720a-5159-4861-9d27-88d532a251c0]: 2
+  C: 3
+  [B, abcabb4a-28bc-4d33-bde4-70d301ba7a6b]: b

@@ -62,10 +62,10 @@ class MappingNode(_NodeBase):
             return self.value.yaml_path[:-1]  # TODO: make it more correct
 
         def get_all_children(self) -> list["Node"]:
-            return [self.value]
+            return [self.key, self.value]
 
         def get_children_with_path(self) -> list[tuple[NodePathKey, "Node"]]:
-            return [(1, self.value)]
+            return [(0, self.key), (1, self.value)]
 
     items: list[Item]
 

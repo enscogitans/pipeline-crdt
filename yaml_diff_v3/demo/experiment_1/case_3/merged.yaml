@@ -1,0 +1,115 @@
+# Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0
+# For details: https://gitlab.com/mlrep/mldev/-/blob/master/NOTICE.md
+
+common_params: &common_params
+  M: &M 10
+  l: &l 1
+
+
+thompson_sampling_algorithm: &thompson_sampling_algorithm !Atom
+  name: thompson_sampling
+  <<: *common_params
+  init_params: !function src/algorithms/multiarmed_bandits_policies/thompson_sampling.init_parameters
+  predict: !function src/algorithms/multiarmed_bandits_policies/thompson_sampling.predict
+  update: !function src/algorithms/multiarmed_bandits_policies/thompson_sampling.update
+  init: |
+    reward = None
+    params = init_params(M)
+  run: |
+    actions = predict(params, l)
+    params = update(params, actions, reward)
+
+
+e_greedy: &e_greedy !Atom
+  name: e_greedy
+  epsilon: 0.1
+  <<: *common_params
+  init_params: !function src/algorithms/multiarmed_bandits_policies/e_greedy.init_parameters
+  predict: !function src/algorithms/multiarmed_bandits_policies/e_greedy.predict
+  update: !function src/algorithms/multiarmed_bandits_policies/e_greedy.update
+  init: |
+    reward = None
+    arm_rewards, arm_choices_count, params = init_params(M)
+  run: |
+    actions = predict(params, M, l, epsilon)
+    arm_rewards, arm_choices_count, params = update(arm_rewards, arm_choices_count, params, reward)
+
+
+optimal: &optimal !Atom
+  name: optimal
+  <<: *common_params
+  predict: !function src/algorithms/multiarmed_bandits_policies/optimal.predict
+  init: |
+    parametrization = None
+  run: |
+    actions = predict(parametrization, M, l)
+
+
+random: &random !Atom
+  name: random
+  <<: *common_params
+  predict: !function src/algorithms/multiarmed_bandits_policies/random.predict
+  run: |
+    actions = predict(M, l)
+
+
+additive_noise_bandit: &additive_noise_bandit !Atom
+  name: additive_noise_bandit
+  <<: *common_params
+  init_bandit: !function src/bandits/drift/noise_bandit.init_bandit
+  update_parametrization: !function src/bandits/drift/noise_bandit.update_parametrization
+  get_actions_reward: !function src/bandits/drift/noise_bandit.get_actions_reward
+  init: |
+    init_parametrization = init_bandit(M)
+    parametrization = init_parametrization.copy()
+  run: |
+    actions_reward = get_actions_reward(parametrization, actions, M, w)
+    parametrization = update_parametrization(actions, actions_reward, parametrization, M, l)
+    loop_amp = np.linalg.norm(parametrization - init_parametrization)**2
+
+
+trial: &trial !Atom
+  name: &trial_name additive_noise_bandit
+  description: Testing the hypothesis that adding uniformly distributed noise does
+    not solve the problem of degeneration of the user's interest profile.
+
+  params:
+    trial: *trial_name
+    round_count: ${env.ROUNDCOUNT}
+    M: *M
+    l: *l
+    w: ${env.W}
+    bandit: *additive_noise_bandit
+    algorithms:
+    - *thompson_sampling_algorithm
+    - *e_greedy
+    - *optimal
+    - *random
+
+  iteration_results:
+    round: !measurement i
+    w: !measurement w
+    actions: !measurement algorithm.actions
+    reward: !measurement bandit.actions_reward
+    loop_amp: !measurement bandit.loop_amp
+    parametrization: !measurement bandit.parametrization
+    algorithm: !measurement algorithm.name
+
+  init: !python |
+    round_count = int(round_count)
+    w = float(w)
+
+  run: !python |
+    for algorithm in algorithms:
+        algorithm()
+        for i in range(round_count):
+            if i > 1:
+                algorithm(reward=bandit.actions_reward, parametrization=bandit.parametrization)
+            bandit(actions=algorithm.actions, w=w)
+
+            observe(iteration_results)
+
+
+pipeline: !GenericPipeline
+  runs:
+  - *trial

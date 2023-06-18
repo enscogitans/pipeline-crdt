@@ -1,0 +1,77 @@
+# Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0
+# For details: https://gitlab.com/mlrep/mldev/-/blob/master/NOTICE.md
+
+common_params: &common_params
+  M: &M 10
+  l: &l 1
+
+
+thompson_sampling_algorithm: &thompson_sampling_algorithm !Atom
+  name: thompson_sampling
+  <<: *common_params
+  init_params: !function src/algorithms/multiarmed_bandits/thompson_sampling.init_parameters
+  predict: !function src/algorithms/multiarmed_bandits/thompson_sampling.predict
+  update: !function src/algorithms/multiarmed_bandits/thompson_sampling.update
+  init: |
+    reward = None
+    params = init_params(M)
+  run: |
+    actions = predict(params, l)
+    params = update(params, actions, reward)
+
+
+additive_noise_user_model: &additive_noise_user_model !Atom
+  name: additive_noise_user_model
+  <<: *common_params
+  init_interests: !function src/user_models/stochastic/noise_user_model.init_interests
+  update: !function src/user_models/stochastic/noise_user_model.update_interests
+  make_response: !function src/user_models/stochastic/noise_user_model.make_response
+  init: |
+    init_interests = init_interests(M)
+    interests = init_interests.copy()
+    cumulative_round_expected_regret = 0
+  run: |
+    reward, best_reward = make_response(interests, actions, M, l, w)
+    interests = update(actions, reward, interests, M, l)
+
+    loop_amp = np.linalg.norm(interests - init_interests)**2
+    round_expected_regret = sum(best_reward) - sum(reward)
+    cumulative_round_expected_regret += round_expected_regret
+
+
+trial: &trial !Atom
+  name: &trial_name additive_noise_user_model
+
+  params:
+    trial: *trial_name
+    round_count: ${env.ROUNDCOUNT}
+    M: *M
+    l: *l
+    w: 0.01
+    user_model: *additive_noise_user_model
+    algorithm: *thompson_sampling_algorithm
+
+  iteration_results:
+    round: !measurement i
+    w: !measurement w
+    actions: !measurement algorithm.actions
+    reward: !measurement user_model.reward
+    best_reward: !measurement user_model.best_reward
+    round_expected_regret: !measurement user_model.round_expected_regret
+    cumulative_round_expected_regret: !measurement user_model.cumulative_round_expected_regret
+    loop_amp: !measurement user_model.loop_amp
+    interests: !measurement user_model.interests
+
+  run: |
+    algorithm()
+    for i in range(int(round_count)):
+        if i > 1:
+            algorithm(reward=user_model.reward)
+        user_model(actions=algorithm.actions, w=params.w)
+
+        observe(iteration_results)
+
+
+pipeline: !GenericPipeline
+  runs:
+  - *trial
